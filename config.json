@@ -1,0 +1,26 @@
+{
+    "mode": "camera_mode",
+    "episodes":1000,
+    "max_steps": 500,
+    "lidar_mode":{
+        "save_path": {
+            "train": "./runs/lidar/train/",
+            "test": "./runs/lidar/test/"
+        },
+        "target_numbers": 150000
+    },
+    "camera_mode":{
+        "save_path": {
+            "train": "./runs/camera/train/",
+            "test": "./runs/camera/test/"
+        },
+        "resize": [64, 64],
+        "max_depth": 10
+    },
+    "all_sensors": {
+        "save_path": {
+            "train": "./runs/allsensors/train/",
+            "test": "./runs/allsensors/test/"
+        }
+    }
+}
