@@ -7,20 +7,36 @@
             "train": "./runs/lidar/train/",
             "test": "./runs/lidar/test/"
         },
-        "target_numbers": 150000
+        "train_infinite": false,
+        "num_episodes": 100,
+        "target_numbers": 150000,
+        "load_model": false,
+        "model_load_path": "path/to/pretrained_model.pth"
     },
     "camera_mode":{
         "save_path": {
             "train": "./runs/camera/train/",
             "test": "./runs/camera/test/"
         },
+        "train_infinite": false,
+        "num_episodes": 100,
         "resize": [64, 64],
-        "max_depth": 10
+        "max_depth": 10,
+        "load_model": false,
+        "model_load_path": "path/to/pretrained_model.pth"
     },
     "all_sensors": {
         "save_path": {
             "train": "./runs/allsensors/train/",
             "test": "./runs/allsensors/test/"
-        }
+        },
+        "train_infinite": false,
+        "num_episodes": 100,
+        "target_numbers": 150000,
+        "resize": [64, 64],
+        "max_depth": 10,
+        "load_model": false,
+        "model_load_path": "path/to/pretrained_model.pth"
     }
+    
 }
