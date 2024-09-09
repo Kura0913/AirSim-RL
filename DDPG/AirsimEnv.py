@@ -18,6 +18,7 @@ class AirSimEnv:
         self.spawn_points = airsimtools.get_targets(self.client, self.drone_name, self.client.simGetObjectPose(spawn_object_name), 2, 1)
         self.targets = airsimtools.get_targets(self.client, self.drone_name, self.client.simGetObjectPose(self.target_name), 2, 1)
         self.max_distance_to_target = 500
+        self.complited_reward = 100
         self.collision_penalty = -100  # Penalty for collision
         self.distance_reward_factor = 1.0  # Reward scaling for distance to target
         self.smoothness_penalty_factor = -0.1  # Penalty for sudden movement changes
@@ -55,6 +56,8 @@ class AirSimEnv:
     def computed_reward(self, velocity):
         """
         Calculate the reward function and determine if the episode should end based on the drone's state.
+
+        return: reward(bool), done(bool), completed(bool)
         """
         state = self.client.getMultirotorState(vehicle_name=self.drone_name)
         position = np.array([state.kinematics_estimated.position.x_val,
@@ -64,7 +67,7 @@ class AirSimEnv:
         # Calculate distance to the current target
         if len(self.targets) == 0:
             # No more targets, end the episode
-            return 0, True  # Return a reward of 0 and end signal
+            return self.complited_reward, True, False  # Return a reward of 100 and end signal
 
         target_position = np.array(self.targets[0])
         distance_to_target = np.linalg.norm(position - target_position)
@@ -83,7 +86,7 @@ class AirSimEnv:
         collision_info = self.client.simGetCollisionInfo(vehicle_name=self.drone_name)
         if collision_info.has_collided or distance_to_target >= self.max_distance_to_target:
             # Collision or too far from the target, end the episode
-            return self.collision_penalty, True  # Return collision penalty and end signal
+            return self.collision_penalty, True, True  # Return collision penalty and end signal
 
         # 3. Smoothness penalty for actions (if needed)
         # Get previous velocity, if not exist, get [0, 0, 0]
@@ -100,7 +103,7 @@ class AirSimEnv:
         # Get final reward
         reward = distance_reward + velocity_change_penalty
 
-        return reward, False  # Return reward and a signal indicating that the episode should not end
+        return reward, False, False  # Return reward and a signal indicating that the episode should not end
 
 
     def get_target_list(self, object_name):

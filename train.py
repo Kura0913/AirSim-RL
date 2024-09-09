@@ -117,7 +117,7 @@ def train(envs, agent, config):
                     sampled_point_cloud = sample_point_cloud(lidar_data, num_points=config["lidar_mode"]["target_numbers"])
                     processed_data = np.concatenate([processed_depth_image.flatten(), sampled_point_cloud.flatten()])
 
-                reward, done = env.computed_reward(actions[i])  # Get rewards and end signals
+                reward, done, completed = env.computed_reward(actions[i])  # Get rewards and end signals
                 next_states.append(processed_data)
                 rewards.append(reward)
                 agent.store(states[i], actions[i], reward, processed_data)
