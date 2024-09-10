@@ -4,7 +4,7 @@ import Tools.AirsimTools as airsimtools
 import time
 
 class AirSimEnv:
-    def __init__(self, drone_name, lidar_sensor="lidar", camera = "camera", target_name = "BP_Grid", spawn_object_name = "", distance_range=(0, 5), maping_range=(1, 3)):
+    def __init__(self, drone_name, lidar_sensor="lidar", camera = "camera", target_name = "BP_Grid", spawn_object_name = "BP_spawn_point", distance_range=(0, 5), maping_range=(1, 3)):
         self.client = airsim.MultirotorClient()
         self.client.confirmConnection()
         self.client.enableApiControl(True, drone_name)
@@ -13,10 +13,11 @@ class AirSimEnv:
         self.lidar_sensor = lidar_sensor
         self.camera = camera
         self.target_name = target_name
+        self.spawn_object_name = spawn_object_name
         self.distance_range = distance_range
         self.maping_range = maping_range 
-        self.spawn_points = airsimtools.get_targets(self.client, self.drone_name, self.client.simGetObjectPose(spawn_object_name), 2, 1)
-        self.targets = airsimtools.get_targets(self.client, self.drone_name, self.client.simGetObjectPose(self.target_name), 2, 1)
+        self.spawn_points = airsimtools.get_targets(self.client, self.drone_name, self.client.simListSceneObjects(f'{self.spawn_object_name}[\w]*'), 2, 1)
+        self.targets = airsimtools.get_targets(self.client, self.drone_name, self.client.simListSceneObjects(f'{self.target_name}[\w]*'), 2, 1)
         self.max_distance_to_target = 500
         self.complited_reward = 100
         self.collision_penalty = -100  # Penalty for collision
@@ -26,7 +27,7 @@ class AirSimEnv:
     def reset(self):
         airsimtools.reset_drone_to_random_spawn_point(self.client, self.drone_name, self.spawn_points)
         time.sleep(1)
-        self.targets = airsimtools.get_targets(self.client, self.drone_name, self.client.simGetObjectPose(self.target_name), 2, 1)
+        self.targets = airsimtools.get_targets(self.client, self.drone_name, self.client.simListSceneObjects(f'{self.target_name}[\w]*'), 2, 1)
         
 
     def takeoff(self):
@@ -40,7 +41,7 @@ class AirSimEnv:
         points = np.array(lidar_data.point_cloud, dtype=np.float32).reshape(-1, 3)
         return points
 
-    def get_camera_img(self):
+    def get_depth_image(self):
         responses = self.client.simGetImages([
             airsim.ImageRequest("0", airsim.ImageType.DepthPerspective, True, False)
         ], vehicle_name=self.drone_name)

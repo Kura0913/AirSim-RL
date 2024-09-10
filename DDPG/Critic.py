@@ -5,9 +5,10 @@ from DDPG.Deeplabv3 import DeepLabV3
 from DDPG.PointNet2 import PointNet2
 
 class Critic(nn.Module):
-    def __init__(self, lidar_channels, depth_channels, action_dim):
+    def __init__(self, state_dim, lidar_dim, depth_dim, lidar_channels=3, depth_channels=1):
         super(Critic, self).__init__()
-        
+        self.lidar_dim = lidar_dim
+        self.depth_dim = depth_dim
         # PointNet++ for LIDAR data
         self.pointnet2 = PointNet2(input_channels=lidar_channels)
         
@@ -15,23 +16,20 @@ class Critic(nn.Module):
         self.deeplabv3 = DeepLabV3(num_classes=depth_channels)
         
         # Fusion Branch
-        self.fc1 = nn.Linear(1024 + 21*256*256 + action_dim, 512)  # Assuming DeepLabV3 outputs 256x256
+        self.fc1 = nn.Linear(state_dim, 512)  # Assuming DeepLabV3 outputs 256x256
         self.fc2 = nn.Linear(512, 1)
 
-    def forward(self, lidar_data=None, depth_data=None, action=None):
-        if lidar_data is not None:
-            lidar_features = self.pointnet2(lidar_data)
-        else:
-            lidar_features = torch.zeros((1, 1024))  # Placeholder for missing lidar features
-
-        if depth_data is not None:
-            depth_features = self.deeplabv3(depth_data)
-            depth_features = torch.flatten(depth_features, start_dim=1)
-        else:
-            depth_features = torch.zeros((1, 21*256*256))  # Placeholder for missing depth features
+    def forward(self, state, action, lidar_data, depth_data):
+        # 处理 LIDAR 数据
+        lidar_feature = self.pointnet2(lidar_data)
         
-        # Fusion
-        fused_features = torch.cat([lidar_features, depth_features, action], dim=1)
-        x = F.relu(self.fc1(fused_features))
-        x = self.fc2(x)
-        return x
+        # 处理深度图像数据
+        depth_feature = self.deeplabv3(depth_data)
+        
+        # 将状态、动作和特征进行拼接
+        fusion_input = torch.cat([state, action, lidar_feature, depth_feature], dim=1)
+        
+        # 经过融合层
+        x = F.relu(self.fc1(fusion_input))
+        q_value = self.fc2(x)
+        return q_value

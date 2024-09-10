@@ -5,34 +5,39 @@ from DDPG.Deeplabv3 import DeepLabV3
 from DDPG.PointNet2 import PointNet2
 
 class Actor(nn.Module):
-    def __init__(self, lidar_channels, depth_channels, action_dim, max_action):
+    def __init__(self, state_dim, action_dim, max_action, points_dim, depth_dim):
         super(Actor, self).__init__()
-        
+        self.points_dim = points_dim
+        self.depth_dim = depth_dim
         # PointNet++ for LIDAR data
-        self.pointnet2 = PointNet2(input_channels=lidar_channels)
+        self.pointnet2 = PointNet2(input_channels=3)
         
         # DeepLabV3 for Depth image data
-        self.deeplabv3 = DeepLabV3(num_classes=depth_channels)
+        self.deeplabv3 = DeepLabV3(num_classes=1)
         
         # Fusion Branch
-        self.fc1 = nn.Linear(1024 + 21*256*256, 512)  # Assuming DeepLabV3 outputs 256x256
+        self.fc1 = nn.Linear(state_dim, 512)  # Assuming DeepLabV3 outputs 256x256
         self.fc2 = nn.Linear(512, action_dim)
         self.max_action = max_action
 
-    def forward(self, lidar_data=None, depth_data=None):
-        if lidar_data is not None:
-            lidar_features = self.pointnet2(lidar_data)
-        else:
-            lidar_features = torch.zeros((1, 1024))  # Placeholder for missing lidar features
+    def forward(self, state):
+        if state.dim() == 1:
+            state = state.unsqueeze(0)
 
-        if depth_data is not None:
-            depth_features = self.deeplabv3(depth_data)
-            depth_features = torch.flatten(depth_features, start_dim=1)
-        else:
-            depth_features = torch.zeros((1, 21*256*256))  # Placeholder for missing depth features
+        # 解析 LIDAR 数据和深度图像数据
+        lidar_data = state[:, :self.points_dim].reshape(-1, self.points_dim // 3, 3)  # 恢复为点云的形状
+        depth_data = state[:, self.points_dim:].reshape(-1, self.depth_dim)  # 恢复为深度图像的形状
+
+        # 处理 LIDAR 数据
+        lidar_feature = self.pointnet2(lidar_data)
         
-        # Fusion
-        fused_features = torch.cat([lidar_features, depth_features], dim=1)
-        x = F.relu(self.fc1(fused_features))
-        x = torch.tanh(self.fc2(x))
-        return x * self.max_action
+        # 处理深度图像数据
+        depth_feature = self.deeplabv3(depth_data)
+        
+        # 将提取的特征进行拼接
+        fusion_input = torch.cat([lidar_feature, depth_feature], dim=1)
+        
+        # 经过融合层
+        x = F.relu(self.fc1(fusion_input))
+        action = self.max_action * torch.tanh(self.fc2(x))
+        return action

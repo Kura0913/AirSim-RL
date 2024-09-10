@@ -77,17 +77,17 @@ def map_value(value_range: tuple, target_range: tuple, value: float):
 def get_targets(client:airsim.MultirotorClient, drone_name, targets, round_decimals, bottom_limit):
 
     target_pos_ary = []
-
-    for target in targets:
-        target_pos = client.simGetObjectPose(target).position
-        target_pos = [np.round(target_pos.x_val, round_decimals), np.round(target_pos.y_val, round_decimals), np.round(target_pos.z_val, round_decimals)]
-        target_pos = check_negative_zero(target_pos[0], target_pos[1], target_pos[2] - bottom_limit)
-        target_pos_ary.append(target_pos)
-    
-    drone_pos = client.simGetVehiclePose(drone_name).position
-    drone_pos = check_negative_zero(np.round(drone_pos.x_val, round_decimals), np.round(drone_pos.y_val, round_decimals), np.round(drone_pos.z_val, round_decimals))
-    target_pos_ary = tsp.getTSP_NNH(target_pos_ary, drone_pos)
-    del target_pos_ary[0]
+    if targets:
+        for target in targets:
+            target_pos = client.simGetObjectPose(target).position
+            target_pos = [np.round(target_pos.x_val, round_decimals), np.round(target_pos.y_val, round_decimals), np.round(target_pos.z_val, round_decimals)]
+            target_pos = check_negative_zero(target_pos[0], target_pos[1], target_pos[2] - bottom_limit)
+            target_pos_ary.append(target_pos)
+        
+        drone_pos = client.simGetVehiclePose(drone_name).position
+        drone_pos = check_negative_zero(np.round(drone_pos.x_val, round_decimals), np.round(drone_pos.y_val, round_decimals), np.round(drone_pos.z_val, round_decimals))
+        target_pos_ary = tsp.getTSP_NNH(target_pos_ary, drone_pos)
+        del target_pos_ary[0]
     return target_pos_ary
 
 def random_position(min_x, max_x, min_y, max_y, min_z, max_z):

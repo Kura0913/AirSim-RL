@@ -6,12 +6,12 @@ from DDPG.Actor import Actor
 from DDPG.Critic import Critic
 
 class DDPGAgent:
-    def __init__(self, state_dim, action_dim, device, lr=1e-3, gamma=0.99, tau=0.005):
+    def __init__(self, state_dim, action_dim, device, max_action, lidar_dim, depth_dim, lr=1e-3, gamma=0.99, tau=0.005):
         self.device = device
-        self.actor = Actor(state_dim, action_dim).to(self.device)
-        self.critic = Critic(state_dim, action_dim).to(self.device)
-        self.target_actor = Actor(state_dim, action_dim).to(self.device)
-        self.target_critic = Critic(state_dim, action_dim).to(self.device)
+        self.actor = Actor(state_dim, action_dim, max_action, lidar_dim, depth_dim).to(self.device)
+        self.critic = Critic(state_dim, lidar_dim, depth_dim).to(self.device)
+        self.target_actor = Actor(state_dim, action_dim, max_action, lidar_dim, depth_dim).to(self.device)
+        self.target_critic = Critic(state_dim, lidar_dim, depth_dim).to(self.device)
 
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=lr)
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=lr)

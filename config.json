@@ -1,42 +1,23 @@
 {
-    "mode": "camera_mode",
+    "mode":"camera_mode",
     "episodes":1000,
     "max_steps": 500,
-    "lidar_mode":{
-        "save_path": {
-            "train": "./runs/lidar/train/",
-            "test": "./runs/lidar/test/"
-        },
-        "train_infinite": false,
-        "num_episodes": 100,
-        "target_numbers": 150000,
-        "load_model": false,
-        "model_load_path": "path/to/pretrained_model.pth"
+    "load_model": false,
+    "model_load_path": "path/to/pretrained_model.pth",
+    "train_infinite": false,
+    "num_episodes": 100,
+    "point_numbers": 150000,
+    "resize": [64, 64],
+    "max_depth": 10,
+    "max_action": 1,
+    "train":{
+        "camera_mode":"./runs/camera/train/",
+        "lidar_mode":"./runs/lidar/train/",
+        "all_sensors":"./runs/all_sensors/train/"
     },
-    "camera_mode":{
-        "save_path": {
-            "train": "./runs/camera/train/",
-            "test": "./runs/camera/test/"
-        },
-        "train_infinite": false,
-        "num_episodes": 100,
-        "resize": [64, 64],
-        "max_depth": 10,
-        "load_model": false,
-        "model_load_path": "path/to/pretrained_model.pth"
-    },
-    "all_sensors": {
-        "save_path": {
-            "train": "./runs/allsensors/train/",
-            "test": "./runs/allsensors/test/"
-        },
-        "train_infinite": false,
-        "num_episodes": 100,
-        "target_numbers": 150000,
-        "resize": [64, 64],
-        "max_depth": 10,
-        "load_model": false,
-        "model_load_path": "path/to/pretrained_model.pth"
+    "test":{
+        "camera_mode":"./runs/camera/test/",
+        "lidar_mode":"./runs/lidar/test/",
+        "all_sensors":"./runs/all_sensors/test/"
     }
-    
 }
