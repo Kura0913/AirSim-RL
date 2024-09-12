@@ -1,4 +1,0 @@
-# AirSim-DDPG
-
-## Coming soon
-
