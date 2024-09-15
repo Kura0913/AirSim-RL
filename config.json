@@ -1,11 +1,11 @@
 {
+    "rl_algorithm": "DDPG",
     "mode":"camera_mode",
-    "episodes":1000,
-    "max_steps": 500,
     "load_model": false,
     "model_load_path": "path/to/pretrained_model.pth",
+    "max_steps":500,
+    "timesteps": 600000,
     "train_infinite": false,
-    "num_episodes": 100,
     "point_numbers": 150000,
     "resize": [64, 64],
     "max_depth": 10,
@@ -19,5 +19,6 @@
         "camera_mode":"./runs/camera/test/",
         "lidar_mode":"./runs/lidar/test/",
         "all_sensors":"./runs/all_sensors/test/"
-    }
+    },
+    "test_path": "path/to/test_folder/"
 }

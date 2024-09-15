@@ -8,7 +8,7 @@ class DataProcessor:
         self.point_numbers = config["point_numbers"]
         self.resize_shape = tuple(config["resize"])
 
-    def process(self, config, lidar_data, depth_image, target_position):
+    def process(self, lidar_data, depth_image, target_position):
         """
         Process data from sensors based on the given mode.
 
@@ -19,24 +19,24 @@ class DataProcessor:
         Returns:
         - np.ndarray: Processed sensor data.
         """
-        if config["mode"] == "lidar_mode":
-            processed_data = self.sample_point_cloud(lidar_data, num_points=config["point_numbers"])
+        if self.config["mode"] == "lidar_mode":
+            processed_data = self.sample_point_cloud(lidar_data, num_points=self.config["point_numbers"])
 
             # Zero padding for depth image data
-            depth_image_size = config["resize"][0] * config["resize"][1]
+            depth_image_size = self.config["resize"][0] * self.config["resize"][1]
             depth_image_zeros = np.zeros(depth_image_size)
             processed_data = np.concatenate([processed_data.flatten(), depth_image_zeros, target_position])
             
-        elif config["mode"] == "camera_mode":
-            processed_data = self.preprocess_depth_image(depth_image, resize=config["resize"]).numpy().flatten()
+        elif self.config["mode"] == "camera_mode":
+            processed_data = self.preprocess_depth_image(depth_image, resize=self.config["resize"]).numpy().flatten()
 
             # Zero padding for point cloud data
-            point_cloud_zeros = np.zeros(config["point_numbers"] * 3)
+            point_cloud_zeros = np.zeros(self.config["point_numbers"] * 3)
             processed_data = np.concatenate([point_cloud_zeros, processed_data, target_position])
 
-        elif config["mode"] == "all_sensors":
-            processed_depth_image = self.preprocess_depth_image(depth_image, resize=config["resize"]).numpy().flatten()
-            sampled_point_cloud = self.sample_point_cloud(lidar_data, num_points=config["point_numbers"]).flatten()
+        elif self.config["mode"] == "all_sensors":
+            processed_depth_image = self.preprocess_depth_image(depth_image, resize=self.config["resize"]).numpy().flatten()
+            sampled_point_cloud = self.sample_point_cloud(lidar_data, num_points=self.config["point_numbers"]).flatten()
             processed_data = np.concatenate([sampled_point_cloud, processed_depth_image, target_position])
 
         return processed_data

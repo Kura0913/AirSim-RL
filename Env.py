@@ -3,10 +3,13 @@ import numpy as np
 import Tools.AirsimTools as airsimtools
 from DataProcessor import DataProcessor
 import time
-import json
+import gymnasium as gym
+from gymnasium import spaces
 
-class AirSimEnv:
+
+class AirSimEnv(gym.Env):
     def __init__(self, drone_name, config, lidar_sensor="lidar", camera = "camera", target_name = "BP_Grid", spawn_object_name = "BP_spawn_point", distance_range=(0, 5), maping_range=(1, 3)):
+        super(AirSimEnv, self).__init__()
         self.client = airsim.MultirotorClient()
         self.client.confirmConnection()
         self.client.enableApiControl(True, drone_name)
@@ -27,6 +30,19 @@ class AirSimEnv:
         self.collision_penalty = -100  # Penalty for collision
         self.distance_reward_factor = 1.0  # Reward scaling for distance to target
         self.smoothness_penalty_factor = -0.1  # Penalty for sudden movement changes
+
+        # Define the observation space based on the config
+        point_numbers = self.config["point_numbers"]
+        resize = self.config["resize"]
+        depth_image_size = resize[0] * resize[1]
+        self.observation_space = spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(point_numbers * 3 + depth_image_size + 3,),  # LIDAR points (x, y, z) + Depth image + Target position (x, y, z)
+            dtype=np.float32
+        )
+        # Define the action space
+        self.action_space = spaces.Box(low=-1, high=1, shape=(3,), dtype=np.float32)  # Example action space
 
     def reset(self):
         airsimtools.reset_drone_to_random_spawn_point(self.client, self.drone_name, self.spawn_points)
@@ -118,7 +134,7 @@ class AirSimEnv:
         else:
             curr_target = [np.nan, np.nan, np.nan]
 
-        return self.processor.process(self.config, lidar_data, depth_image, curr_target)
+        return self.processor.process(lidar_data, depth_image, curr_target)
 
     def step(self, action):
         n, e, d = action
@@ -154,22 +170,12 @@ class AirSimEnv:
         else:
             return False, False
 
-class AirSimMultiDroneEnv:
+class AirSimMultiDroneEnv(gym.Env):
     def __init__(self, config, drone_list):
+        super(AirSimMultiDroneEnv, self).__init__()
         self.config = config
-        self.drones = drone_list
-
-    def create_drone_env(self, drone_name):
-        return AirSimEnv(drone_name, self.config)
-
-    def reset(self):
-        obs = {}
-        for drone_name, drone_env in self.drones.items():
-            obs[drone_name] = drone_env.reset()
-        return obs
-
-    def step(self, actions):
-        obs, rewards, dones, infos = {}, {}, {}, {}
-        for drone_name, action in actions.items():
-            obs[drone_name], rewards[drone_name], dones[drone_name], infos[drone_name] = self.drones[drone_name].step(action)
-        return obs, rewards, dones, infos
+        self.drones = {drone_name: AirSimEnv(drone_name, config) for drone_name in drone_list}
+        self.action_space = spaces.Dict({
+            drone_name: spaces.Box(low=-1, high=1, shape=(3,), dtype=np.float32)
+            for drone_name in drone_list
+        })

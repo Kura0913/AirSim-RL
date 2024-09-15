@@ -1,7 +1,10 @@
 from stable_baselines3 import PPO, DDPG
 from stable_baselines3.common.vec_env import DummyVecEnv
+from Model.BaseCallback import CustomCallback
 from Model.Network import CustomNetwork
 from datetime import datetime
+import json
+import torch
 import os
 
 class RLModel:
@@ -18,14 +21,19 @@ class RLModel:
         else:
             raise ValueError(f"Unsupported RL algorithm: {self.config['rl_algorithm']}")
 
-    def train(self):
+    def train(self):        
         mode = self.config["mode"]
         save_dir = self.config["train"][mode]
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         save_path = os.path.join(save_dir, timestamp)
-        os.makedirs(save_path, exist_ok=True) 
-        self.model.learn(total_timesteps=self.config['episodes'] * self.config['max_steps'])
-        self.model.save("model_path")  # Could use a better path
+        os.makedirs(save_path, exist_ok=True)
+        callback = CustomCallback(self.config['rl_algorithm'], save_path)
+        self.model.learn(total_timesteps=self.config['timesteps'], callback=callback)
+        self.model.save(save_path + "model.pth")  # Could use a better path
+        with open(save_path + 'config.json', 'w') as f:
+            json.dump(self.config, f)
+
+        return save_path
 
     def test(self):
         obs = self.env.reset()
@@ -34,4 +42,11 @@ class RLModel:
             obs, rewards, done, info = self.env.step(action)
             if done:
                 break
-    
+
+    def load_model(self, model_path):
+        # 加載模型權重
+        if model_path and model_path.endswith('.pth'):
+            self.model.load_state_dict(torch.load(model_path))
+            print(f"Model loaded from {model_path}")
+        else:
+            print(f"Invalid model path: {model_path}")
