@@ -5,6 +5,7 @@ from stable_baselines3.common.vec_env import SubprocVecEnv
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
 
 def save_training_data(save_path):
     rewards = np.load(save_path + "episode_rewards.npy")
@@ -30,10 +31,10 @@ def load_config():
     with open('config.json', 'r') as file:
         return json.load(file)
 
-def make_env(env_id, config, drone_list):
+def make_env(env_id, config, drone_list, device):
     """Create subprocess environment function"""
     def _init():
-        env = AirSimMultiDroneEnv(config, drone_list)
+        env = AirSimMultiDroneEnv(config, drone_list, device)
         return env
     return _init
 
@@ -45,15 +46,19 @@ def get_drone_names(settings_path):
         return drone_names
 
 def run_training():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(device)  # Output: "cuda" if GPU is available, otherwise "cpu"
     # load config
     config = load_config()
     
     # create env for multiple drone
     num_drones = get_drone_names(os.path.expanduser("~\\Documents\\AirSim\\settings.json"))
-    env = SubprocVecEnv([make_env(i, config, num_drones) for i in range(len(num_drones))])  # Create a multi-process environment
+    env = SubprocVecEnv([make_env(i, config, num_drones, device) for i in range(len(num_drones))])  # Create a multi-process environment
 
     # initial RL model
-    rl_model = RLModel(config, env)
+    rl_model = RLModel(config, env)    
+
+    rl_model.to(device)
 
     # start training
     print(f"Training with RL algorithm: {config['rl_algorithm']}")

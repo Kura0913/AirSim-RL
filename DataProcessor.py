@@ -3,8 +3,9 @@ import cv2
 import torch
 
 class DataProcessor:
-    def __init__(self, config):
+    def __init__(self, config, device):
         self.config = config
+        self.device = device
         self.point_numbers = config["point_numbers"]
         self.resize_shape = tuple(config["resize"])
 
@@ -39,7 +40,10 @@ class DataProcessor:
             sampled_point_cloud = self.sample_point_cloud(lidar_data, num_points=self.config["point_numbers"]).flatten()
             processed_data = np.concatenate([sampled_point_cloud, processed_depth_image, target_position])
 
-        return processed_data
+        # Convert the processed data to a torch tensor and move to the same device as the model
+        processed_data_tensor = torch.tensor(processed_data).to(self.device)
+
+        return processed_data_tensor
 
 
     def preprocess_depth_image(self, depth_image, resize, max_depth=255.0, min_depth_threshold=1.0, ignore_value=np.nan):
@@ -72,7 +76,7 @@ class DataProcessor:
         depth_image_normalized[depth_image_normalized > (min_depth_threshold / max_depth)] = ignore_value    
         
         # Convert to PyTorch tensor format
-        depth_image_tensor = torch.from_numpy(depth_image_normalized).unsqueeze(0).float()  # (1, 84, 84)
+        depth_image_tensor = torch.from_numpy(depth_image_normalized).unsqueeze(0).float()
         
         return depth_image_tensor
     

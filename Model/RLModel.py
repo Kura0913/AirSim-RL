@@ -3,6 +3,8 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from Model.BaseCallback import CustomCallback
 from Model.Network import CustomNetwork
 from datetime import datetime
+import torch.optim as optim
+from torch import nn
 import json
 import torch
 import os
@@ -12,10 +14,15 @@ class RLModel:
         self.config = config
         self.env = DummyVecEnv([lambda: env])  # Wrap Airsim environment as vectorized environment
         self.model = self.initialize_model()
+        # Define the loss function (e.g., MSE for DQN)
+        self.criterion = nn.MSELoss()
+        
+        # Define the optimizer (e.g., Adam optimizer)
+        self.optimizer = optim.Adam(self.model.get_parameters(), lr=config['learning_rate'])
 
     def initialize_model(self):
         if self.config['rl_algorithm'] == 'PPO':
-            return PPO(CustomNetwork, self.env, verbose=1)
+            return PPO(CustomNetwork, self.env, verbose=1, learning_rate=self.config['learning_rate'])
         elif self.config['rl_algorithm'] == 'DDPG':
             return DDPG(CustomNetwork, self.env, verbose=1)
         else:

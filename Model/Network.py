@@ -1,22 +1,24 @@
-import torch as th
+from torchvision import models
 import torch.nn as nn
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
 class CustomNetwork(BaseFeaturesExtractor):
-    def __init__(self, observation_space, features_dim=256):
+    def __init__(self, observation_space, features_dim=512):
         super(CustomNetwork, self).__init__(observation_space, features_dim)
-        self.cnn = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=8, stride=4, padding=0),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0),
-            nn.ReLU(),
-            nn.Flatten()
-        )
-        # Define the layers used to extract features
+        
+        # Load a pretrained ResNet101 model
+        self.cnn = models.resnet152(pretrained=True)
+        
+        # Remove the final fully connected layer
+        self.cnn = nn.Sequential(*list(self.cnn.children())[:-1])
+
+        # Define a new fully connected layer to match the feature dimensions
         self.linear = nn.Sequential(
-            nn.Linear(64 * 7 * 7, features_dim),
+            nn.Linear(self.cnn[-1].in_features, features_dim),
             nn.ReLU()
         )
 
     def forward(self, observations):
-        return self.linear(self.cnn(observations))
+        x = self.cnn(observations)
+        x = x.view(x.size(0), -1)  # Flatten
+        return self.linear(x)

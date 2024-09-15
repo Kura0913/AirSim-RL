@@ -8,14 +8,14 @@ from gymnasium import spaces
 
 
 class AirSimEnv(gym.Env):
-    def __init__(self, drone_name, config, lidar_sensor="lidar", camera = "camera", target_name = "BP_Grid", spawn_object_name = "BP_spawn_point", distance_range=(0, 5), maping_range=(1, 3)):
+    def __init__(self, drone_name, config, device, lidar_sensor="lidar", camera = "camera", target_name = "BP_Grid", spawn_object_name = "BP_spawn_point", distance_range=(0, 5), maping_range=(1, 3)):
         super(AirSimEnv, self).__init__()
         self.client = airsim.MultirotorClient()
         self.client.confirmConnection()
         self.client.enableApiControl(True, drone_name)
         self.client.armDisarm(True, drone_name)
         self.config = config
-        self.processor = DataProcessor(config)
+        self.processor = DataProcessor(config, device)
         self.drone_name = drone_name
         self.lidar_sensor = lidar_sensor
         self.camera = camera
@@ -171,10 +171,10 @@ class AirSimEnv(gym.Env):
             return False, False
 
 class AirSimMultiDroneEnv(gym.Env):
-    def __init__(self, config, drone_list):
+    def __init__(self, config, drone_list, device):
         super(AirSimMultiDroneEnv, self).__init__()
         self.config = config
-        self.drones = {drone_name: AirSimEnv(drone_name, config) for drone_name in drone_list}
+        self.drones = {drone_name: AirSimEnv(drone_name, config, device) for drone_name in drone_list}
         self.action_space = spaces.Dict({
             drone_name: spaces.Box(low=-1, high=1, shape=(3,), dtype=np.float32)
             for drone_name in drone_list
