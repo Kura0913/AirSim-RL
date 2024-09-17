@@ -1,7 +1,6 @@
 import json
-from Env import AirSimMultiDroneEnv
+from Env import AirSimMultiDroneEnv, AirSimEnv
 from Model.RLModel import RLModel
-from stable_baselines3.common.vec_env import SubprocVecEnv
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -45,26 +44,28 @@ def get_drone_names(settings_path):
         print(f"drone list: {drone_names}")
         return drone_names
 
-def run_training():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(device)  # Output: "cuda" if GPU is available, otherwise "cpu"
+def run_training_single():
     # load config
     config = load_config()
-    
-    # create env for multiple drone
-    num_drones = get_drone_names(os.path.expanduser("~\\Documents\\AirSim\\settings.json"))
-    env = SubprocVecEnv([make_env(i, config, num_drones, device) for i in range(len(num_drones))])  # Create a multi-process environment
+    if config['device'] == 'cuda':
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    else:
+        device = torch.device("cpu")
+    print(device)  # Output: "cuda" if GPU is available, otherwise "cpu"
 
-    # initial RL model
-    rl_model = RLModel(config, env)    
+    # Create a single drone environment
+    drone_list = get_drone_names(os.path.expanduser("~\\Documents\\AirSim\\settings.json"))
+    drone_name = drone_list[0]  # Use only the first drone for single drone training
+    env = AirSimEnv(drone_name, config, device)  # Directly create the environment
 
-    rl_model.to(device)
+    # Initialize RL model
+    rl_model = RLModel(config, env, device)
 
-    # start training
+    # Start training
     print(f"Training with RL algorithm: {config['rl_algorithm']}")
     save_path = rl_model.train()
     print("Training completed.")
     save_training_data(save_path)
 
 if __name__ == "__main__":
-    run_training()
+    run_training_single()

@@ -1,30 +1,36 @@
 from stable_baselines3 import PPO, DDPG
-from stable_baselines3.common.vec_env import DummyVecEnv
+from Model.NetPolicies import MixedInputPPOPolicy, MixedInputDDPGPolicy
 from Model.BaseCallback import CustomCallback
-from Model.Network import CustomNetwork
 from datetime import datetime
-import torch.optim as optim
-from torch import nn
 import json
 import torch
 import os
 
 class RLModel:
-    def __init__(self, config, env):
+    def __init__(self, config, env, device):
         self.config = config
-        self.env = DummyVecEnv([lambda: env])  # Wrap Airsim environment as vectorized environment
+        self.env = env
+        self.device = device
         self.model = self.initialize_model()
-        # Define the loss function (e.g., MSE for DQN)
-        self.criterion = nn.MSELoss()
         
-        # Define the optimizer (e.g., Adam optimizer)
-        self.optimizer = optim.Adam(self.model.get_parameters(), lr=config['learning_rate'])
 
     def initialize_model(self):
         if self.config['rl_algorithm'] == 'PPO':
-            return PPO(CustomNetwork, self.env, verbose=1, learning_rate=self.config['learning_rate'])
+            return PPO(
+                MixedInputPPOPolicy,
+                self.env,
+                verbose=1,
+                learning_rate=self.config['learning_rate'],
+                device=self.device
+            )
         elif self.config['rl_algorithm'] == 'DDPG':
-            return DDPG(CustomNetwork, self.env, verbose=1)
+            return DDPG(
+                MixedInputDDPGPolicy,
+                self.env,
+                verbose=1,
+                learning_rate=self.config['learning_rate'],
+                device=self.device
+            )
         else:
             raise ValueError(f"Unsupported RL algorithm: {self.config['rl_algorithm']}")
 
@@ -51,7 +57,7 @@ class RLModel:
                 break
 
     def load_model(self, model_path):
-        # 加載模型權重
+        # load model weight
         if model_path and model_path.endswith('.pth'):
             self.model.load_state_dict(torch.load(model_path))
             print(f"Model loaded from {model_path}")
