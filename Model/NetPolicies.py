@@ -94,7 +94,7 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
             drone_position_size = 3
             target_position_size = 3
 
-            total_size = point_cloud_size + depth_image_size + target_position_size
+            total_size = point_cloud_size + depth_image_size + drone_position_size + target_position_size
             if obs.size(1) != total_size:
                 raise ValueError(f"Expected observation size {total_size}, but got {obs.size(1)}")
 
@@ -212,7 +212,7 @@ class MixedInputDDPGPolicy(TD3Policy):
         target_position_size = 3
 
         # Check that the total size matches
-        total_size = point_cloud_size + depth_image_size + target_position_size
+        total_size = point_cloud_size + depth_image_size + drone_position_size + target_position_size
         if obs.size(1) != total_size:
             raise ValueError(f"Expected observation size {total_size}, but got {obs.size(1)}")
 

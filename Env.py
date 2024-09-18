@@ -39,7 +39,7 @@ class AirSimEnv(gym.Env):
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
-            shape=(point_numbers * 3 + depth_image_size + 3,),  # LIDAR points (x, y, z) + Depth image + Target position (x, y, z)
+            shape=(point_numbers * 3 + depth_image_size + 3 + 3,),  # LIDAR points (x, y, z) + Depth image + drone position (x, y, z) + Target position (x, y, z)
             dtype=np.float32
         )
         # Define the action space
@@ -135,13 +135,14 @@ class AirSimEnv(gym.Env):
     def get_observation(self):
         depth_image = self.get_depth_image()
         lidar_data = self.get_lidar_data()
+        pose = self.client.simGetVehiclePose(self.drone_name)
+        drone_position = [float(pose.position.x_val), float(pose.position.y_val), float(pose.position.z_val)]
         if self.targets:
             curr_target = self.targets[0]
-        else:
-            pose = self.client.simGetVehiclePose(self.drone_name)
-            curr_target = [float(pose.position.x_val), float(pose.position.y_val), float(pose.position.z_val)]
+        else:            
+            curr_target = drone_position
 
-        observation = self.processor.process(lidar_data, depth_image, curr_target)
+        observation = self.processor.process(lidar_data, depth_image, drone_position, curr_target)
     
         if isinstance(observation, torch.Tensor):
             observation = observation.cpu().numpy()
