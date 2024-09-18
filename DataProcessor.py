@@ -46,7 +46,7 @@ class DataProcessor:
         return processed_data_tensor
 
 
-    def preprocess_depth_image(self, depth_image, resize, max_depth=255.0, min_depth_threshold=1.0, ignore_value=np.nan):
+    def preprocess_depth_image(self, depth_image, resize, max_depth=255.0, min_depth_threshold=1.0, ignore_value=-999):
         """
         Preprocess the depth image, setting pixels below a certain threshold to a specified ignore value.
 

@@ -26,7 +26,7 @@ class AirSimEnv(gym.Env):
         self.maping_range = maping_range 
         self.spawn_points = airsimtools.get_targets(self.client, self.drone_name, self.client.simListSceneObjects(f'{self.spawn_object_name}[\w]*'), 2, 1)
         self.targets = airsimtools.get_targets(self.client, self.drone_name, self.client.simListSceneObjects(f'{self.target_name}[\w]*'), 2, 1)
-        self.max_distance_to_target = 500
+        self.max_distance_to_target = 50
         self.complited_reward = 100
         self.collision_penalty = -100  # Penalty for collision
         self.distance_reward_factor = 1.0  # Reward scaling for distance to target
@@ -138,7 +138,8 @@ class AirSimEnv(gym.Env):
         if self.targets:
             curr_target = self.targets[0]
         else:
-            curr_target = [np.nan, np.nan, np.nan]
+            pose = self.client.simGetVehiclePose(self.drone_name)
+            curr_target = [float(pose.position.x_val), float(pose.position.y_val), float(pose.position.z_val)]
 
         observation = self.processor.process(lidar_data, depth_image, curr_target)
     

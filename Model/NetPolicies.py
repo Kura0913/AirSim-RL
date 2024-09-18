@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from stable_baselines3.common.policies import ActorCriticPolicy
+from stable_baselines3.common.distributions import DiagGaussianDistribution
 from stable_baselines3.td3.policies import TD3Policy
 from torchvision import models
 import json
@@ -14,6 +16,7 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
         self.config = self.load_config()
         self.point_cloud_numbers = self.config['point_numbers'] # number of point clouds
         self.resize = self.config["resize"] # size of depth image
+
         # CNN for depth image
         self.cnn = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)  # Using ResNet152 as it's smaller
         self.cnn = nn.Sequential(*list(self.cnn.children())[:-1])  # Remove the final fully connected layer
@@ -23,10 +26,13 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
             cnn_output = self.cnn(dummy_input)
         self.cnn_feature_dim = cnn_output.view(1, -1).size(1)
 
+        # Fully connected layer for CNN output
+        self.cnn_fc = nn.Linear(self.cnn_feature_dim, 256)
+
         # MLP for point cloud data
         self.point_cloud_mlp = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(self.point_cloud_numbers * 3, 256),  # 512 points with 3 dimensions
+            nn.Linear(self.point_cloud_numbers * 3, 256),
             nn.ReLU(),
             nn.Linear(256, 128),
             nn.ReLU()
@@ -46,26 +52,49 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
             nn.ReLU()
         )
 
+        # Policy network (outputs mean actions)
+        self.policy_net = nn.Sequential(
+            nn.Linear(64, 128),
+            nn.ReLU(),
+            nn.Linear(128, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, self.action_space.shape[0])  # For continuous actions
+        )
+
+        # Value network (outputs state value)
+        self.value_net = nn.Sequential(
+            nn.Linear(64, 128),
+            nn.ReLU(),
+            nn.Linear(128, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 1)  # State value
+        )
+
+        # Standard deviation parameter for Gaussian policy
+        self.log_std = nn.Parameter(torch.zeros(self.action_space.shape[0]), requires_grad=True)
+
     def load_config(self):
         with open('config.json', 'r') as file:
             return json.load(file)
         
-    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+    def forward(self, obs: torch.Tensor) -> tuple:
         try:
-            # Assuming obs is a flattened tensor containing all data
             point_cloud_size = self.point_cloud_numbers * 3
             depth_image_size = self.resize[0] * self.resize[1]
             target_position_size = 3
 
-            # Check that the total size matches
             total_size = point_cloud_size + depth_image_size + target_position_size
             if obs.size(1) != total_size:
                 raise ValueError(f"Expected observation size {total_size}, but got {obs.size(1)}")
 
             # Extract individual parts
             obs_split = torch.split(obs, [point_cloud_size, depth_image_size, target_position_size], dim=1)
-            point_cloud = obs_split[0].view(-1, self.point_cloud_numbers, 3)  # Reshape to (batch_size, 512, 3)
-            depth_image = obs_split[1].view(-1, 1, self.resize[0], self.resize[1])  # Reshape to (batch_size, 1, 64, 64)
+            point_cloud = obs_split[0].view(-1, self.point_cloud_numbers, 3)  # Reshape to (batch_size, point_cloud_numbers, 3)
+            depth_image = obs_split[1].view(-1, 1, self.resize[0], self.resize[1])  # Reshape to (batch_size, 1, resize[0], resize[1])
             target_position = obs_split[2]  # (batch_size, 3)
 
             # Convert depth_image to float32
@@ -77,9 +106,10 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
             depth_image = depth_image.expand(-1, 3, -1, -1)  # Expand to 3 channels
             cnn_features = self.cnn(depth_image)
             cnn_features = cnn_features.view(cnn_features.size(0), -1)  # Flatten
+            # cnn_features = F.relu(self.cnn_fc(cnn_features.view(cnn_features.size(0), -1)))  # Flatten and apply FC
 
             # Process point cloud
-            point_cloud_features = self.point_cloud_mlp(point_cloud)
+            point_cloud_features = self.point_cloud_mlp(point_cloud.view(-1, self.point_cloud_numbers * 3))
 
             # Process target position
             target_position_features = self.target_fc(target_position)
@@ -88,7 +118,20 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
             combined_features = torch.cat((cnn_features, point_cloud_features, target_position_features), dim=1)
             combined_features = self.fc_combined(combined_features)
 
-            return combined_features
+            # Policy network output
+            mean_actions = self.policy_net(combined_features)
+            log_std = self.log_std.expand_as(mean_actions)
+            std = torch.exp(log_std)
+            distribution = DiagGaussianDistribution(mean_actions.shape[-1]).proba_distribution(mean_actions, std)
+
+            # Sample actions
+            actions = distribution.get_actions()
+            log_probs = distribution.log_prob(actions)
+
+            # Value network output
+            values = self.value_net(combined_features)
+
+            return actions, values, log_probs
         except Exception as e:
             print(f"Error during forward pass: {e}")
             raise
