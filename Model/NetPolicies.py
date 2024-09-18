@@ -38,6 +38,12 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
             nn.ReLU()
         )
 
+        # Fully connected layer for drone position
+        self.drone_fc = nn.Sequential(
+            nn.Linear(3, 32),  # 3 dimensions for drone_position
+            nn.ReLU()
+        )
+
         # Fully connected layer for target position
         self.target_fc = nn.Sequential(
             nn.Linear(3, 32),  # 3 dimensions for target position
@@ -46,7 +52,7 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
 
         # Combined feature layer
         self.fc_combined = nn.Sequential(
-            nn.Linear(self.cnn_feature_dim + 128 + 32, 64),
+            nn.Linear(self.cnn_feature_dim + 128 + 32 + 32, 64),
             nn.ReLU(),
             nn.Linear(64, 64),
             nn.ReLU()
@@ -85,6 +91,7 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
         try:
             point_cloud_size = self.point_cloud_numbers * 3
             depth_image_size = self.resize[0] * self.resize[1]
+            drone_position_size = 3
             target_position_size = 3
 
             total_size = point_cloud_size + depth_image_size + target_position_size
@@ -92,14 +99,16 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
                 raise ValueError(f"Expected observation size {total_size}, but got {obs.size(1)}")
 
             # Extract individual parts
-            obs_split = torch.split(obs, [point_cloud_size, depth_image_size, target_position_size], dim=1)
+            obs_split = torch.split(obs, [point_cloud_size, depth_image_size, drone_position_size, target_position_size], dim=1)
             point_cloud = obs_split[0].view(-1, self.point_cloud_numbers, 3)  # Reshape to (batch_size, point_cloud_numbers, 3)
             depth_image = obs_split[1].view(-1, 1, self.resize[0], self.resize[1])  # Reshape to (batch_size, 1, resize[0], resize[1])
-            target_position = obs_split[2]  # (batch_size, 3)
+            drone_position = obs_split[2]  # (batch_size, 3)
+            target_position = obs_split[3]  # (batch_size, 3)
 
             # Convert depth_image to float32
             depth_image = depth_image.float()
             point_cloud = point_cloud.float()
+            drone_position = drone_position.float()
             target_position = target_position.float()
 
             # Process depth image
@@ -112,10 +121,13 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
             point_cloud_features = self.point_cloud_mlp(point_cloud.view(-1, self.point_cloud_numbers * 3))
 
             # Process target position
+            drone_position_features = self.drone_fc(drone_position)
+
+            # Process target position
             target_position_features = self.target_fc(target_position)
 
             # Combine features
-            combined_features = torch.cat((cnn_features, point_cloud_features, target_position_features), dim=1)
+            combined_features = torch.cat((cnn_features, point_cloud_features, drone_position_features, target_position_features), dim=1)
             combined_features = self.fc_combined(combined_features)
 
             # Policy network output
@@ -168,6 +180,12 @@ class MixedInputDDPGPolicy(TD3Policy):
             nn.ReLU()
         )
 
+        # Fully connected layer for drone position
+        self.drone_fc = nn.Sequential(
+            nn.Linear(3, 32),  # 3 dimensions for drone_position
+            nn.ReLU()
+        )
+
         # Fully connected layer for target position
         self.target_fc = nn.Sequential(
             nn.Linear(3, 32),  # 3 dimensions for target position
@@ -176,7 +194,7 @@ class MixedInputDDPGPolicy(TD3Policy):
 
         # Combined feature layer
         self.fc_combined = nn.Sequential(
-            nn.Linear(self.cnn_feature_dim + 128 + 32, 64),
+            nn.Linear(self.cnn_feature_dim + 128 + 32 + 32, 64),
             nn.ReLU(),
             nn.Linear(64, 64),
             nn.ReLU()
@@ -190,6 +208,7 @@ class MixedInputDDPGPolicy(TD3Policy):
         # Assuming obs is a flattened tensor containing all data
         point_cloud_size = self.point_cloud_numbers * 3
         depth_image_size = self.resize[0] * self.resize[1]
+        drone_position_size = 3
         target_position_size = 3
 
         # Check that the total size matches
@@ -198,14 +217,16 @@ class MixedInputDDPGPolicy(TD3Policy):
             raise ValueError(f"Expected observation size {total_size}, but got {obs.size(1)}")
 
         # Extract individual parts
-        obs_split = torch.split(obs, [point_cloud_size, depth_image_size, target_position_size], dim=1)
+        obs_split = torch.split(obs, [point_cloud_size, depth_image_size, drone_position_size, target_position_size], dim=1)
         point_cloud = obs_split[0].view(-1, self.point_cloud_numbers, 3)  # Reshape to (batch_size, 512, 3)
         depth_image = obs_split[1].view(-1, 1, self.resize[0], self.resize[1])  # Reshape to (batch_size, 1, 64, 64)
-        target_position = obs_split[2]  # (batch_size, 3)
+        drone_position = obs_split[2]  # (batch_size, 3)
+        target_position = obs_split[3]  # (batch_size, 3)
 
         # Convert depth_image to float32
         depth_image = depth_image.float()
         point_cloud = point_cloud.float()
+        drone_position = drone_position.float()
         target_position = target_position.float()
 
         # Process depth image
@@ -216,11 +237,14 @@ class MixedInputDDPGPolicy(TD3Policy):
         # Process point cloud
         point_cloud_features = self.point_cloud_mlp(point_cloud)
 
+        # Process drone position
+        drone_position_features = self.drone_fc(drone_position)
+
         # Process target position
         target_position_features = self.target_fc(target_position)
 
         # Combine features
-        combined_features = torch.cat((cnn_features, point_cloud_features, target_position_features), dim=1)
+        combined_features = torch.cat((cnn_features, point_cloud_features, drone_position_features, target_position_features), dim=1)
         combined_features = self.fc_combined(combined_features)
 
         return combined_features

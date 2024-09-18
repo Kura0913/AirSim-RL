@@ -9,7 +9,7 @@ class DataProcessor:
         self.point_numbers = config["point_numbers"]
         self.resize_shape = tuple(config["resize"])
 
-    def process(self, lidar_data, depth_image, target_position):
+    def process(self, lidar_data, depth_image, drone_position, target_position):
         """
         Process data from sensors based on the given mode.
 
@@ -26,19 +26,19 @@ class DataProcessor:
             # Zero padding for depth image data
             depth_image_size = self.config["resize"][0] * self.config["resize"][1]
             depth_image_zeros = np.zeros(depth_image_size)
-            processed_data = np.concatenate([processed_data.flatten(), depth_image_zeros, target_position])
+            processed_data = np.concatenate([processed_data.flatten(), depth_image_zeros, drone_position, target_position])
             
         elif self.config["mode"] == "camera_mode":
             processed_data = self.preprocess_depth_image(depth_image, resize=self.config["resize"]).numpy().flatten()
 
             # Zero padding for point cloud data
             point_cloud_zeros = np.zeros(self.config["point_numbers"] * 3)
-            processed_data = np.concatenate([point_cloud_zeros, processed_data, target_position])
+            processed_data = np.concatenate([point_cloud_zeros, processed_data, drone_position, target_position])
 
         elif self.config["mode"] == "all_sensors":
             processed_depth_image = self.preprocess_depth_image(depth_image, resize=self.config["resize"]).numpy().flatten()
             sampled_point_cloud = self.sample_point_cloud(lidar_data, num_points=self.config["point_numbers"]).flatten()
-            processed_data = np.concatenate([sampled_point_cloud, processed_depth_image, target_position])
+            processed_data = np.concatenate([sampled_point_cloud, processed_depth_image, drone_position, target_position])
 
         # Convert the processed data to a torch tensor and move to the same device as the model
         processed_data_tensor = torch.tensor(processed_data).to(self.device)
