@@ -148,7 +148,7 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
             print(f"Error during forward pass: {e}")
             raise
 
-    def _predict(self, observation: torch.Tensor) -> torch.Tensor:
+    def _predict(self, observation: torch.Tensor, deterministic:bool = False) -> torch.Tensor:
         features = self.forward(observation)
         return features
     
@@ -249,6 +249,6 @@ class MixedInputDDPGPolicy(TD3Policy):
 
         return combined_features
 
-    def _predict(self, observation: torch.Tensor) -> torch.Tensor:
+    def _predict(self, observation: torch.Tensor, deterministic:bool = False) -> torch.Tensor:
         features = self.forward(observation)
         return features

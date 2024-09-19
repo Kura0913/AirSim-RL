@@ -40,6 +40,7 @@ class RLModel:
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         save_path = os.path.join(save_dir, timestamp)
         os.makedirs(save_path, exist_ok=True)
+        save_path = save_path + '/'
         callback = CustomCallback(self.config['rl_algorithm'], save_path)
         self.model.learn(total_timesteps=self.config['timesteps'], callback=callback)
         self.model.save(save_path + "model.pth")  # Could use a better path
