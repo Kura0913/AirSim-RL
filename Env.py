@@ -33,15 +33,12 @@ class AirSimEnv(gym.Env):
         self.smoothness_penalty_factor = -0.1  # Penalty for sudden movement changes
 
         # Define the observation space based on the config
-        point_numbers = self.config["point_numbers"]
-        resize = self.config["resize"]
-        depth_image_size = resize[0] * resize[1]
-        self.observation_space = spaces.Box(
-            low=-np.inf,
-            high=np.inf,
-            shape=(point_numbers * 3 + depth_image_size + 3 + 3,),  # LIDAR points (x, y, z) + Depth image + drone position (x, y, z) + Target position (x, y, z)
-            dtype=np.float32
-        )
+        self.observation_space = spaces.Dict({
+            "point_cloud": spaces.Box(low=-np.inf, high=np.inf, shape=(self.config['point_numbers'], 3), dtype=np.float32),
+            "depth_image": spaces.Box(low=0, high=255, shape=(self.config['resize'][0], self.config['resize'][1], 1), dtype=np.float32),
+            "drone_position": spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32),
+            "target_position": spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32)
+        })
         # Define the action space
         self.action_space = spaces.Box(low=-1, high=1, shape=(3,), dtype=np.float32)  # Example action space
 
@@ -53,8 +50,6 @@ class AirSimEnv(gym.Env):
         time.sleep(1)
         self.targets = airsimtools.get_targets(self.client, self.drone_name, self.client.simListSceneObjects(f'{self.target_name}[\w]*'), 2, 1)
         observation = self.get_observation()
-        if observation.ndim == 0:
-            print(f"Error: Reset returned a zero-dimensional array for drone {self.drone_name}")
         return observation, dict()
 
     def takeoff(self):
@@ -142,10 +137,17 @@ class AirSimEnv(gym.Env):
         else:            
             curr_target = drone_position
 
-        observation = self.processor.process(lidar_data, depth_image, drone_position, curr_target)
+        processed_data = self.processor.process(lidar_data, depth_image, drone_position, curr_target)
     
-        if isinstance(observation, torch.Tensor):
-            observation = observation.cpu().numpy()
+        if isinstance(processed_data, torch.Tensor):
+            processed_data = processed_data.cpu().numpy()
+
+        observation = {
+            "point_cloud": processed_data['point_cloud'].cpu().numpy(),
+            "depth_image": processed_data['depth_image'].cpu().numpy().transpose(1, 2, 0),
+            "drone_position": np.array(drone_position, dtype=np.float32),
+            "target_position": np.array(curr_target, dtype=np.float32)
+        }
     
         return observation
 
