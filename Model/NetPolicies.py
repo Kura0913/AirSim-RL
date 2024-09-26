@@ -7,6 +7,7 @@ from stable_baselines3.td3.policies import TD3Policy
 import torch
 import torch.nn as nn
 import json
+import numpy as np
 
 class MixedInputPPOPolicy(ActorCriticPolicy):
     def __init__(self, observation_space, action_space, lr_schedule, **kwargs):
@@ -45,12 +46,34 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
             nn.ReLU(),
             nn.Linear(64, 1)
         )
-    
-    def forward(self, obs: dict) -> tuple:
-        point_cloud = obs["point_cloud"]
-        depth_image = obs["depth_image"]
-        drone_position = obs["drone_position"]
-        target_position = obs["target_position"]
+
+    def _process_observation(self, obs):
+        if isinstance(obs, dict):
+            return obs
+        batch_size = 1 if obs.dim() == 1 else obs.size(0)
+
+        point_cloud_size = self.point_cloud_numbers * 3
+        depth_image_size = self.resize[0] * self.resize[1]
+        
+        point_cloud, depth_image, positions = torch.split(obs.view(batch_size, -1), [point_cloud_size, depth_image_size, 6], dim=1)
+        
+        point_cloud = point_cloud.view(batch_size, self.point_cloud_numbers, 3)
+        depth_image = depth_image = depth_image.view(batch_size, 1, *self.resize)
+        drone_position, target_position = torch.split(positions, [3, 3], dim=1)
+        
+        return {
+            "point_cloud": point_cloud,
+            "depth_image": depth_image,
+            "drone_position": drone_position,
+            "target_position": target_position
+        }
+
+    def forward(self, obs):
+        obs_dict = self._process_observation(obs)
+        point_cloud = obs_dict["point_cloud"]
+        depth_image = obs_dict["depth_image"]
+        drone_position = obs_dict["drone_position"]
+        target_position = obs_dict["target_position"]
 
         # Process positions to get initial velocity
         initial_velocity = self.position_processing(drone_position, target_position)
@@ -130,11 +153,16 @@ class MixedInputDDPGPolicy(TD3Policy):
         with open('config.json', 'r') as file:
             return json.load(file)
 
-    def forward(self, obs: dict) -> torch.Tensor:
-        point_cloud = obs["point_cloud"]
-        depth_image = obs["depth_image"]
-        drone_position = obs["drone_position"]
-        target_position = obs["target_position"]
+    def forward(self, obs) -> torch.Tensor:
+        if isinstance(obs, dict):
+            obs_dict = obs
+        else:
+            obs_dict = self._process_observation(obs)
+
+        point_cloud = obs_dict["point_cloud"]
+        depth_image = obs_dict["depth_image"]
+        drone_position = obs_dict["drone_position"]
+        target_position = obs_dict["target_position"]
 
         # Process positions to get initial velocity
         initial_velocity = self.position_processing(drone_position, target_position)
@@ -148,9 +176,32 @@ class MixedInputDDPGPolicy(TD3Policy):
         return final_velocity
 
     def _predict(self, observation: dict, deterministic: bool = False) -> torch.Tensor:
+        if not isinstance(observation, dict):
+            observation = self._process_observation(observation)
         actions = self.forward(observation)
         if deterministic:
             return actions.mean
         actions = actions.clamp(-1, 1)  # Clamp actions to [-1, 1]
         actions = (actions * 100).round() / 100  # Round to nearest 0.01
         return actions
+    
+    def _process_observation(self, obs):
+        if isinstance(obs, dict):
+            return obs
+        batch_size = 1 if obs.dim() == 1 else obs.size(0)
+
+        point_cloud_size = self.point_cloud_numbers * 3
+        depth_image_size = self.resize[0] * self.resize[1]
+        
+        point_cloud, depth_image, positions = torch.split(obs.view(batch_size, -1), [point_cloud_size, depth_image_size, 6], dim=1)
+        
+        point_cloud = point_cloud.view(batch_size, self.point_cloud_numbers, 3)
+        depth_image = depth_image = depth_image.view(batch_size, 1, *self.resize)
+        drone_position, target_position = torch.split(positions, [3, 3], dim=1)
+        
+        return {
+            "point_cloud": point_cloud,
+            "depth_image": depth_image,
+            "drone_position": drone_position,
+            "target_position": target_position
+        }

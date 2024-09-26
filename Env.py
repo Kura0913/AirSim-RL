@@ -31,14 +31,20 @@ class AirSimEnv(gym.Env):
         self.collision_penalty = -100  # Penalty for collision
         self.distance_reward_factor = 1.0  # Reward scaling for distance to target
         self.smoothness_penalty_factor = -0.1  # Penalty for sudden movement changes
+        # get observation space size
+        point_cloud_size = config['point_numbers'] * 3
+        depth_image_size = config['resize'][0] * config['resize'][1]
+        drone_position_size = 3
+        target_position_size = 3
+        total_obs_size = point_cloud_size + depth_image_size + drone_position_size + target_position_size
 
         # Define the observation space based on the config
-        self.observation_space = spaces.Dict({
-            "point_cloud": spaces.Box(low=-np.inf, high=np.inf, shape=(self.config['point_numbers'], 3), dtype=np.float32),
-            "depth_image": spaces.Box(low=0, high=255, shape=(self.config['resize'][0], self.config['resize'][1], 1), dtype=np.float32),
-            "drone_position": spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32),
-            "target_position": spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32)
-        })
+        self.observation_space = spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(total_obs_size,),
+            dtype=np.float32
+        )
         # Define the action space
         self.action_space = spaces.Box(low=-1, high=1, shape=(3,), dtype=np.float32)  # Example action space
 
@@ -149,7 +155,12 @@ class AirSimEnv(gym.Env):
             "target_position": np.array(curr_target, dtype=np.float32)
         }
     
-        return observation
+        return np.concatenate([
+            observation['point_cloud'].flatten(),
+            observation['depth_image'].flatten(),
+            observation['drone_position'].flatten(),
+            observation['target_position'].flatten()
+        ])
 
     def step(self, action):
         print(action)

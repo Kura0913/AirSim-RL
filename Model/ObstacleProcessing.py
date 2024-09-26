@@ -24,7 +24,7 @@ class ObstacleProcessing(nn.Module):
             pc_features = torch.zeros(point_cloud.size(0), 128, device=point_cloud.device)
 
         if self.mode in ['camera_mode', 'all_sensors']:
-            depth_image = depth_image.permute(0, 3, 1, 2)
+            # depth_image = depth_image.permute(0, 3, 1, 2)
             depth_features = self.cnn(depth_image.expand(-1, 3, -1, -1))
         else:
             depth_features = torch.zeros(depth_image.size(0), 128, device=depth_image.device)
