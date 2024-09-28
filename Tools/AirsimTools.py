@@ -48,6 +48,14 @@ def get_yaw_mode_F(velocity):
 
     return airsim.YawMode(False, angle_in_degree)
 
+def get_yaw_mode_F(prev_velocity, velocity):
+    if velocity[0] == 0 and velocity[1] == 0:
+        angle_in_degree = calculate_horizontal_rotation_angle(prev_velocity)
+    else:
+        angle_in_degree = calculate_horizontal_rotation_angle(velocity)
+
+    return airsim.YawMode(False, angle_in_degree)
+
 def get_velocity(vehicle_position, target_position, round_decimals: int):
     ### variable type:
     ### vehicle_position: airsim.Pose.position

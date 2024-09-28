@@ -26,6 +26,8 @@ class AirSimEnv(gym.Env):
         self.maping_range = maping_range 
         self.spawn_points = airsimtools.get_targets(self.client, self.drone_name, self.client.simListSceneObjects(f'{self.spawn_object_name}[\w]*'), 2, 1)
         self.targets = airsimtools.get_targets(self.client, self.drone_name, self.client.simListSceneObjects(f'{self.target_name}[\w]*'), 2, 1)
+        self.prev_velocity = -1
+        self.prev_distance = -1
         self.max_distance_to_target = 50
         self.complited_reward = 100
         self.collision_penalty = -100  # Penalty for collision
@@ -102,25 +104,21 @@ class AirSimEnv(gym.Env):
         elif terminated and not completed:
             return self.collision_penalty, terminated, completed
         else:
-            # Get previous distance to target, if not exist, get -1
-            prev_distance = getattr(self, f'prev_distance_{self.drone_name}', -1)
-            if distance_to_target < prev_distance or prev_distance == -1:
+            if distance_to_target < self.prev_distance or self.prev_distance == -1:
                 distance_reward = 5
             else:
                 distance_reward = -3
             # Save previous distance
-            setattr(self, f'prev_distance_{self.drone_name}', distance_to_target)
+            self.prev_distance = distance_to_target
 
-            # Get previous velocity, if not exist, get -1
-            prev_velocity = getattr(self, f'prev_velocity_{self.drone_name}', -1)
             # Calculate the rate of change of velocity and apply a smoothness penalty
-            if prev_velocity == -1:
+            if self.prev_velocity == -1:
                 velocity_change_penalty = 0
             else:
-                velocity_change_penalty = np.linalg.norm(np.array(velocity) - np.array(prev_velocity)) * self.smoothness_penalty_factor
+                velocity_change_penalty = np.linalg.norm(np.array(velocity) - np.array(self.prev_velocity)) * self.smoothness_penalty_factor
 
             # Save previous velocity
-            setattr(self, f'prev_velocity_{self.drone_name}', velocity)
+            self.prev_velocity = velocity
 
             # Get final reward
             reward = distance_reward + velocity_change_penalty
@@ -165,13 +163,13 @@ class AirSimEnv(gym.Env):
     def step(self, action):
         print(action)
         n, e, d = action
-        prev_distance = getattr(self, f'prev_distance_{self.drone_name}', -1)
-        if prev_distance == -1:
+        if self.prev_distance == -1:
             speed = 5
         else:
-            speed = airsimtools.map_value(self.distance_range, self.maping_range, prev_distance)
+            speed = airsimtools.map_value(self.distance_range, self.maping_range, self.prev_distance)
         n, e, d = airsimtools.scale_and_normalize_vector([n, e, d], speed)
-        self.client.moveByVelocityAsync(float(n), float(e), float(d), duration=1, vehicle_name=self.drone_name).join()
+        yawmode = airsimtools.get_yaw_mode_F(self.prev_velocity, velocity = [n, e, d])
+        self.client.moveByVelocityAsync(float(n), float(e), float(d), duration=1, vehicle_name=self.drone_name, yaw_mode=yawmode).join()
         next_state = self.get_observation()
 
         reward, terminated, completed = self.computed_reward([n, e, d])
