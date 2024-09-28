@@ -96,7 +96,7 @@ class AirSimEnv(gym.Env):
                             state.kinematics_estimated.position.z_val])
         target_position = np.array(self.targets[0])
         distance_to_target = np.linalg.norm(position - target_position)
-
+        self.check_curr_target_arrive(distance_to_target)
         terminated, completed = self.check_done(distance_to_target)
 
         if terminated and completed:
@@ -194,6 +194,15 @@ class AirSimEnv(gym.Env):
             return True, False
         else:
             return False, False
+    def check_curr_target_arrive(self, distance_to_target):
+        if distance_to_target <= 0.05:
+            del self.targets[0]
+            if self.targets:
+                print(f'Target arrive, get new target: {self.targets[0]}.')
+            else:
+                print("Arrive all targets, mission compeleted.")
+
+
 
 class AirSimMultiDroneEnv(gym.Env):
     def __init__(self, config, drone_list, device):
