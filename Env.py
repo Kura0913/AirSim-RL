@@ -127,7 +127,7 @@ class AirSimEnv(gym.Env):
         else:
             speed = airsimtools.map_value(self.distance_range, self.maping_range, self.prev_distance)
         n, e, d = airsimtools.scale_and_normalize_vector([n, e, d], speed)
-        yawmode = self.get_yaw_mode_F(self.prev_velocity, velocity = [n, e, d])
+        yawmode = self.get_yaw_mode_F(velocity = [n, e, d])
         self.client.moveByVelocityAsync(float(n), float(e), float(d), duration=1, vehicle_name=self.drone_name, yaw_mode=yawmode).join()
         next_state = self.get_observation()
 
@@ -202,7 +202,7 @@ class AirSimEnv(gym.Env):
             else:
                 print("Arrive all targets, mission compeleted.")
     
-    def get_yaw_mode_F(self, prev_velocity, velocity):
+    def get_yaw_mode_F(self, velocity):
         x, y, _ = velocity
         speed = np.sqrt(x**2 + y**2)
         
@@ -212,19 +212,21 @@ class AirSimEnv(gym.Env):
         
         # Set the maximum rotation angle (degrees)
         max_rotation = 45
-        
+        if self.prev_velocity == -1:
+            return airsim.YawMode(False, 0)
+
         if speed < min_speed:
             # The speed is too small, keep the current direction
-            if prev_velocity[0] == 0 and prev_velocity[1] == 0:
+            if self.prev_velocity[0] == 0 and self.prev_velocity[1] == 0:
                 angle_in_degree = 0
             else:
-                angle_in_degree = airsimtools.calculate_horizontal_rotation_angle(prev_velocity)
+                angle_in_degree = airsimtools.calculate_horizontal_rotation_angle(self.prev_velocity)
         else:
             # Calculate target angle
             target_angle = airsimtools.calculate_horizontal_rotation_angle(velocity)
             
             # Calculate current angle
-            current_angle = airsimtools.calculate_horizontal_rotation_angle(prev_velocity) if prev_velocity[0] != 0 or prev_velocity[1] != 0 else 0
+            current_angle = airsimtools.calculate_horizontal_rotation_angle(self.prev_velocity) if self.prev_velocity[0] != 0 or self.prev_velocity[1] != 0 else 0
             
             # Calculate angle difference
             angle_diff = (target_angle - current_angle + 180) % 360 - 180

@@ -12,7 +12,7 @@
       "EnableTrace": false,
       "ClockType": "ScalableClock",
       "Cameras": {
-        "camera1": {
+        "camera": {
           "CaptureSettings": [
             {
               "ImageType": 0,
