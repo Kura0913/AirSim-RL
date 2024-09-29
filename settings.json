@@ -12,18 +12,18 @@
       "EnableTrace": false,
       "ClockType": "ScalableClock",
       "Cameras": {
-        "camera": {
+        "camera1": {
           "CaptureSettings": [
             {
               "ImageType": 0,
-              "Width": 960,
-              "Height": 540,
+              "Width": 480,
+              "Height": 270,
               "FOV_Degrees": 90
             },
             {
               "ImageType": 2,
-              "Width": 960,
-              "Height": 540,
+              "Width": 480,
+              "Height": 270,
               "FOV_Degrees": 90
             }],
           "X": 0.0,
@@ -47,7 +47,7 @@
           "VerticalFOVLower": -45,
           "HorizontalFOVStart": -45,
           "HorizontalFOVEnd": 45,
-          "DrawDebugPoints": true,
+          "DrawDebugPoints": false,
           "DataFrame": "SensorLocalFrame"
         }
       }

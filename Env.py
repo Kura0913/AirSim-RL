@@ -9,7 +9,7 @@ import torch
 
 
 class AirSimEnv(gym.Env):
-    def __init__(self, drone_name, config, device, lidar_sensor="lidar", camera = "camera", target_name = "BP_Grid", spawn_object_name = "BP_spawn_point", distance_range=(0, 5), maping_range=(1, 3)):
+    def __init__(self, drone_name, config, device, lidar_sensor="lidar", camera = "camera", target_name = "BP_Grid", spawn_object_name = "BP_spawn_point", distance_range=(0, 10), maping_range=(1, 3)):
         super(AirSimEnv, self).__init__()
         self.client = airsim.MultirotorClient()
         self.client.confirmConnection()
@@ -73,7 +73,7 @@ class AirSimEnv(gym.Env):
 
     def get_depth_image(self):
         responses = self.client.simGetImages([
-            airsim.ImageRequest("0", airsim.ImageType.DepthPerspective, True, False)
+            airsim.ImageRequest("camera", airsim.ImageType.DepthPerspective, True, False)
         ], vehicle_name=self.drone_name)
 
         if responses and responses[0].width != 0 and responses[0].height != 0:
@@ -123,7 +123,7 @@ class AirSimEnv(gym.Env):
         print(action)
         n, e, d = action
         if self.prev_distance == -1:
-            speed = 5
+            speed = 3
         else:
             speed = airsimtools.map_value(self.distance_range, self.maping_range, self.prev_distance)
         n, e, d = airsimtools.scale_and_normalize_vector([n, e, d], speed)
@@ -203,11 +203,39 @@ class AirSimEnv(gym.Env):
                 print("Arrive all targets, mission compeleted.")
     
     def get_yaw_mode_F(self, prev_velocity, velocity):
-        if velocity[0] == 0 and velocity[1] == 0:
-            angle_in_degree = airsimtools.calculate_horizontal_rotation_angle(prev_velocity)
+        x, y, _ = velocity
+        speed = np.sqrt(x**2 + y**2)
+        
+        # Set the minimum speed threshold, below which no rotation will occur
+        min_speed = 0.1
+        max_speed = 5
+        
+        # Set the maximum rotation angle (degrees)
+        max_rotation = 45
+        
+        if speed < min_speed:
+            # The speed is too small, keep the current direction
+            if prev_velocity[0] == 0 and prev_velocity[1] == 0:
+                angle_in_degree = 0
+            else:
+                angle_in_degree = airsimtools.calculate_horizontal_rotation_angle(prev_velocity)
         else:
-            angle_in_degree = airsimtools.calculate_horizontal_rotation_angle(velocity)
-
+            # Calculate target angle
+            target_angle = airsimtools.calculate_horizontal_rotation_angle(velocity)
+            
+            # Calculate current angle
+            current_angle = airsimtools.calculate_horizontal_rotation_angle(prev_velocity) if prev_velocity[0] != 0 or prev_velocity[1] != 0 else 0
+            
+            # Calculate angle difference
+            angle_diff = (target_angle - current_angle + 180) % 360 - 180
+            
+            # Adjust the rotation amplitude according to the speed
+            rotation_factor = min(speed / max_speed, 1)
+            max_rotation_this_step = max_rotation * rotation_factor
+            
+            # Limit rotation range
+            angle_in_degree = current_angle + max(-max_rotation_this_step, min(angle_diff, max_rotation_this_step))
+        
         return airsim.YawMode(False, angle_in_degree)
 
 
