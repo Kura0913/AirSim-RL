@@ -83,47 +83,6 @@ class AirSimEnv(gym.Env):
             return img2d
         else:
             return None
-    
-    def computed_reward(self, velocity):
-        """
-        Calculate the reward function and determine if the episode should end based on the drone's state.
-
-        return: reward(bool), done(bool), completed(bool)
-        """
-        state = self.client.getMultirotorState(vehicle_name=self.drone_name)
-        position = np.array([state.kinematics_estimated.position.x_val,
-                            state.kinematics_estimated.position.y_val,
-                            state.kinematics_estimated.position.z_val])
-        target_position = np.array(self.targets[0])
-        distance_to_target = np.linalg.norm(position - target_position)
-        self.check_curr_target_arrive(distance_to_target)
-        terminated, completed = self.check_done(distance_to_target)
-
-        if terminated and completed:
-            return self.complited_reward, terminated, completed
-        elif terminated and not completed:
-            return self.collision_penalty, terminated, completed
-        else:
-            if distance_to_target < self.prev_distance or self.prev_distance == -1:
-                distance_reward = 5
-            else:
-                distance_reward = -3
-            # Save previous distance
-            self.prev_distance = distance_to_target
-
-            # Calculate the rate of change of velocity and apply a smoothness penalty
-            if self.prev_velocity == -1:
-                velocity_change_penalty = 0
-            else:
-                velocity_change_penalty = np.linalg.norm(np.array(velocity) - np.array(self.prev_velocity)) * self.smoothness_penalty_factor
-
-            # Save previous velocity
-            self.prev_velocity = velocity
-
-            # Get final reward
-            reward = distance_reward + velocity_change_penalty
-
-            return reward, False, False
 
     def get_target_list(self, object_name):
         objects = self.client.simListSceneObjects(f'{object_name}[\w]*')
@@ -168,7 +127,7 @@ class AirSimEnv(gym.Env):
         else:
             speed = airsimtools.map_value(self.distance_range, self.maping_range, self.prev_distance)
         n, e, d = airsimtools.scale_and_normalize_vector([n, e, d], speed)
-        yawmode = airsimtools.get_yaw_mode_F(self.prev_velocity, velocity = [n, e, d])
+        yawmode = self.get_yaw_mode_F(self.prev_velocity, velocity = [n, e, d])
         self.client.moveByVelocityAsync(float(n), float(e), float(d), duration=1, vehicle_name=self.drone_name, yaw_mode=yawmode).join()
         next_state = self.get_observation()
 
@@ -179,6 +138,47 @@ class AirSimEnv(gym.Env):
     def close(self):
         self.client.armDisarm(False, self.drone_name)
         self.client.enableApiControl(False, self.drone_name)
+
+    def computed_reward(self, velocity):
+        """
+        Calculate the reward function and determine if the episode should end based on the drone's state.
+
+        return: reward(bool), done(bool), completed(bool)
+        """
+        state = self.client.getMultirotorState(vehicle_name=self.drone_name)
+        position = np.array([state.kinematics_estimated.position.x_val,
+                            state.kinematics_estimated.position.y_val,
+                            state.kinematics_estimated.position.z_val])
+        target_position = np.array(self.targets[0])
+        distance_to_target = np.linalg.norm(position - target_position)
+        self.check_curr_target_arrive(distance_to_target)
+        terminated, completed = self.check_done(distance_to_target)
+
+        if terminated and completed:
+            return self.complited_reward, terminated, completed
+        elif terminated and not completed:
+            return self.collision_penalty, terminated, completed
+        else:
+            if distance_to_target < self.prev_distance or self.prev_distance == -1:
+                distance_reward = 5
+            else:
+                distance_reward = -3
+            # Save previous distance
+            self.prev_distance = distance_to_target
+
+            # Calculate the rate of change of velocity and apply a smoothness penalty
+            if self.prev_velocity == -1:
+                velocity_change_penalty = 0
+            else:
+                velocity_change_penalty = np.linalg.norm(np.array(velocity) - np.array(self.prev_velocity)) * self.smoothness_penalty_factor
+
+            # Save previous velocity
+            self.prev_velocity = velocity
+
+            # Get final reward
+            reward = distance_reward + velocity_change_penalty
+
+            return reward, False, False
 
     def check_done(self, distance_to_target):
         '''
@@ -195,12 +195,20 @@ class AirSimEnv(gym.Env):
         else:
             return False, False
     def check_curr_target_arrive(self, distance_to_target):
-        if distance_to_target <= 0.05:
+        if distance_to_target <= 0.5:
             del self.targets[0]
             if self.targets:
                 print(f'Target arrive, get new target: {self.targets[0]}.')
             else:
                 print("Arrive all targets, mission compeleted.")
+    
+    def get_yaw_mode_F(self, prev_velocity, velocity):
+        if velocity[0] == 0 and velocity[1] == 0:
+            angle_in_degree = airsimtools.calculate_horizontal_rotation_angle(prev_velocity)
+        else:
+            angle_in_degree = airsimtools.calculate_horizontal_rotation_angle(velocity)
+
+        return airsim.YawMode(False, angle_in_degree)
 
 
 
