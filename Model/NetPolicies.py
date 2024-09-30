@@ -2,12 +2,13 @@ from Model.ObstacleProcessing import ObstacleProcessing
 from Model.PositionProcessing import PositionProcessing
 from Model.VelocityAdjustment import VelocityAdjustment
 from stable_baselines3.common.policies import ActorCriticPolicy
-from stable_baselines3.common.distributions import DiagGaussianDistribution
+from stable_baselines3.common.distributions import Distribution
+from stable_baselines3.common.torch_layers import MlpExtractor
 from stable_baselines3.td3.policies import TD3Policy
 import torch
 import torch.nn as nn
 import json
-import numpy as np
+
 
 class MixedInputPPOPolicy(ActorCriticPolicy):
     def __init__(self, observation_space, action_space, lr_schedule, **kwargs):
@@ -31,8 +32,31 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
         # Value network (outputs state value)
         self.value_net = self.create_value_net()
 
+        self.action_net = nn.Sequential(
+            nn.Linear(64, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, self.action_space.shape[0])
+        )
+
         # Standard deviation parameter for Gaussian policy
         self.log_std = nn.Parameter(torch.zeros(self.action_space.shape[0]), requires_grad=True)
+
+    def _build_mlp_extractor(self) -> None:
+        """
+        Create the policy and value networks.
+        Part of the layers can be shared.
+        """
+        # Note: If net_arch is None and some features extractor is used,
+        #       net_arch here is an empty list and mlp_extractor does not
+        #       really contain any layers (acts like an identity module).
+        self.mlp_extractor = MlpExtractor(
+            291,
+            net_arch=self.net_arch,
+            activation_fn=self.activation_fn,
+            device=self.device,
+        )
 
     def load_config(self):
         with open('config.json', 'r') as file:
@@ -40,7 +64,7 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
         
     def create_value_net(self):
         return nn.Sequential(
-            nn.Linear(291, 128),
+            nn.Linear(64, 128),
             nn.ReLU(),
             nn.Linear(128, 64),
             nn.ReLU(),
@@ -67,8 +91,8 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
             "drone_position": drone_position,
             "target_position": target_position
         }
-
-    def forward(self, obs):
+    
+    def extract_features(self, obs: torch.Tensor) -> torch.Tensor:
         obs_dict = self._process_observation(obs)
         point_cloud = obs_dict["point_cloud"]
         depth_image = obs_dict["depth_image"]
@@ -77,58 +101,56 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
 
         # Process positions to get initial velocity
         initial_velocity = self.position_processing(drone_position, target_position)
-        
         # Process obstacle information
         obstacle_features = self.obstacle_processing(point_cloud, depth_image)
-        
         # Adjust velocity based on obstacle information
         final_velocity = self.velocity_adjustment(initial_velocity, obstacle_features)
-        
         # Compute value
         combined_features = torch.cat((initial_velocity, obstacle_features), dim=1)
-        value = self.value_net(combined_features)
 
-        # Create distribution
-        log_std = self.log_std.expand_as(final_velocity)
-        std = torch.exp(log_std)
-        distribution = DiagGaussianDistribution(final_velocity.shape[-1]).proba_distribution(final_velocity, std)
+        return combined_features
+    
+    def _get_action_dist_from_latent(self, latent_pi: torch.Tensor) -> Distribution:
+        mean_actions = self.action_net(latent_pi)
         
-        # Sample actions
-        actions = distribution.get_actions()
-        log_probs = distribution.log_prob(actions)
+        if mean_actions.dim() == 1:
+            mean_actions = mean_actions.unsqueeze(0)
+        if self.log_std.dim() == 1:
+            log_std = self.log_std.unsqueeze(0).expand_as(mean_actions)
+        else:
+            log_std = self.log_std
 
-        return actions, value, log_probs
+        return self.action_dist.proba_distribution(mean_actions, log_std)
 
-    def evaluate_actions(self, obs: dict, actions: torch.Tensor) -> tuple:
-        point_cloud = obs["point_cloud"]
-        depth_image = obs["depth_image"]
-        drone_position = obs["drone_position"]
-        target_position = obs["target_position"]
+    def forward(self, obs, deterministic: bool = True):
+        combined_features = self.extract_features(obs)
+        
+        latent_pi, latent_vf = self.mlp_extractor(combined_features)
 
-        initial_velocity = self.position_processing(drone_position, target_position)
-        obstacle_features = self.obstacle_processing(point_cloud, depth_image)
-        final_velocity = self.velocity_adjustment(initial_velocity, obstacle_features)
+        distribution = self._get_action_dist_from_latent(latent_pi)
 
-        combined_features = torch.cat((initial_velocity, obstacle_features), dim=1)
-        value = self.value_net(combined_features)
+        actions = distribution.get_actions(deterministic=deterministic)
 
-        log_std = self.log_std.expand_as(final_velocity)
-        std = torch.exp(log_std)
-        distribution = DiagGaussianDistribution(final_velocity.shape[-1]).proba_distribution(final_velocity, std)
+        log_prob = distribution.log_prob(actions)
+        values = self.value_net(latent_vf)
 
-        log_probs = distribution.log_prob(actions)
+        return actions, values, log_prob
+
+    def evaluate_actions(self, obs: torch.Tensor, actions: torch.Tensor) -> tuple:
+        features = self.extract_features(obs)
+        latent_pi, latent_vf = self.mlp_extractor(features)
+        distribution = self._get_action_dist_from_latent(latent_pi)
+        log_prob = distribution.log_prob(actions)
+        values = self.value_net(latent_vf)
         entropy = distribution.entropy()
 
-        return value, log_probs, entropy
-
-    def _predict(self, observation: dict, deterministic: bool = False) -> torch.Tensor:
-        actions, _, _ = self.forward(observation)
-        if deterministic:
-            return actions.mean
-        actions = actions.clamp(-1, 1)  # Clamp actions to [-1, 1]
-        actions = (actions * 100).round() / 100  # Round to nearest 0.01
-        return actions
+        return values, log_prob, entropy
     
+    # def _predict(self, observation: torch.Tensor, deterministic: bool = True) -> torch.Tensor:
+    #     features = self.extract_features(observation)
+    #     latent_pi, _ = self.mlp_extractor(features)
+    #     mean_actions = self.action_net(latent_pi)
+    #     return self.action_dist.get_actions(mean_actions, deterministic=deterministic)
 
 class MixedInputDDPGPolicy(TD3Policy):
     def __init__(self, observation_space, action_space, lr_schedule, **kwargs):

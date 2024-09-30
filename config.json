@@ -1,5 +1,5 @@
 {
-    "rl_algorithm": "DDPG",
+    "rl_algorithm": "PPO",
     "device": "cuda",
     "mode":"camera_mode",
     "load_model": false,
