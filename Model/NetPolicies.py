@@ -32,6 +32,13 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
         # Value network (outputs state value)
         self.value_net = self.create_value_net()
 
+        self.mlp_extractor = MlpExtractor(
+            feature_dim=291,
+            net_arch=self.net_arch,
+            activation_fn=self.activation_fn,
+            device=self.device
+        )
+
         self.action_net = nn.Sequential(
             nn.Linear(64, 128),
             nn.ReLU(),
