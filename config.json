@@ -8,7 +8,7 @@
     "timesteps": 600000,
     "train_infinite": false,
     "point_numbers": 512,
-    "learning_rate": 0.0001,
+    "learning_rate": 0.2,
     "resize": [64, 64],
     "max_depth": 10,
     "max_action": 1,

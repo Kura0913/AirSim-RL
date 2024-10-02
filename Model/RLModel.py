@@ -1,6 +1,8 @@
 from stable_baselines3 import PPO, DDPG
-from Model.NetPolicies import MixedInputPPOPolicy, MixedInputDDPGPolicy
-from Model.BaseCallback import CustomCallback
+from Model.MixedInputPPOPolicy import MixedInputPPOPolicy
+from Model.MixedInputDDPGPolicy import MixedInputDDPGPolicy
+from Model.CustomCallback import CustomCallback
+from stable_baselines3.common.buffers import ReplayBuffer, RolloutBuffer
 from datetime import datetime
 import json
 import torch
@@ -20,16 +22,24 @@ class RLModel:
                 MixedInputPPOPolicy,
                 self.env,
                 verbose=1,
+                gamma=0.9999,
+                n_steps = 2048,
+                batch_size=256,
+                ent_coef=0.01,
                 learning_rate=self.config['learning_rate'],
-                device=self.device
+                device=self.device,
+                policy_kwargs={"config": self.config}
             )
         elif self.config['rl_algorithm'] == 'DDPG':
             return DDPG(
                 MixedInputDDPGPolicy,
                 self.env,
                 verbose=1,
+                gamma=0.9999,
                 learning_rate=self.config['learning_rate'],
-                device=self.device
+                device=self.device,
+                replay_buffer_class=ReplayBuffer,
+                policy_kwargs={"config": self.config}
             )
         else:
             raise ValueError(f"Unsupported RL algorithm: {self.config['rl_algorithm']}")
@@ -41,7 +51,7 @@ class RLModel:
         save_path = os.path.join(save_dir, timestamp)
         os.makedirs(save_path, exist_ok=True)
         save_path = save_path + '/'
-        callback = CustomCallback(self.config['rl_algorithm'], save_path)
+        callback = CustomCallback(self.config['rl_algorithm'], save_path, verbose=1)
         self.model.learn(total_timesteps=self.config['timesteps'], callback=callback)
         self.model.save(save_path + "model.pth")  # Could use a better path
         with open(save_path + 'config.json', 'w') as f:
