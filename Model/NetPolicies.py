@@ -41,7 +41,7 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
         )
 
         # Standard deviation parameter for Gaussian policy
-        self.log_std = nn.Parameter(torch.zeros(self.action_space.shape[0]), requires_grad=True)
+        self.log_std = nn.Parameter(torch.zeros(self.action_space.shape[0]))
 
     def _build_mlp_extractor(self) -> None:
         """
@@ -115,14 +115,11 @@ class MixedInputPPOPolicy(ActorCriticPolicy):
         
         if mean_actions.dim() == 1:
             mean_actions = mean_actions.unsqueeze(0)
-        if self.log_std.dim() == 1:
-            log_std = self.log_std.unsqueeze(0).expand_as(mean_actions)
-        else:
-            log_std = self.log_std
+        log_std = self.log_std.expand_as(mean_actions)
 
         return self.action_dist.proba_distribution(mean_actions, log_std)
 
-    def forward(self, obs, deterministic: bool = True):
+    def forward(self, obs, deterministic: bool = False):
         combined_features = self.extract_features(obs)
         
         latent_pi, latent_vf = self.mlp_extractor(combined_features)

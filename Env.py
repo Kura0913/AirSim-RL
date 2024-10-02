@@ -28,7 +28,7 @@ class AirSimEnv(gym.Env):
         self.targets = airsimtools.get_targets(self.client, self.drone_name, self.client.simListSceneObjects(f'{self.target_name}[\w]*'), 2, 1)
         self.prev_velocity = -1
         self.prev_distance = -1
-        self.max_distance_to_target = 50
+        self.max_distance_to_target = 30
         self.complited_reward = 100
         self.collision_penalty = -100  # Penalty for collision
         self.distance_reward_factor = 1.0  # Reward scaling for distance to target
@@ -73,7 +73,7 @@ class AirSimEnv(gym.Env):
 
     def get_depth_image(self):
         responses = self.client.simGetImages([
-            airsim.ImageRequest("camera", airsim.ImageType.DepthPerspective, True, False)
+            airsim.ImageRequest("0", airsim.ImageType.DepthPerspective, True, False)
         ], vehicle_name=self.drone_name)
 
         if responses and responses[0].width != 0 and responses[0].height != 0:
