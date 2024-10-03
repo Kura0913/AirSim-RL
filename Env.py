@@ -53,6 +53,8 @@ class AirSimEnv(gym.Env):
     def reset(self, seed=None):
         if seed is not None:
             np.random.seed(seed)
+        print("----------------------------------------------")
+        print("Reset Env...")
         airsimtools.reset_drone_to_random_spawn_point(self.client, self.drone_name, self.spawn_points)
         self.takeoff()
         time.sleep(1)
@@ -120,19 +122,25 @@ class AirSimEnv(gym.Env):
         ])
 
     def step(self, action):
-        print(action)
         n, e, d = action
         # if self.prev_distance == -1:
         #     speed = 3
         # else:
         #     speed = airsimtools.map_value(self.distance_range, self.maping_range, self.prev_distance)
         n, e, d = airsimtools.scale_and_normalize_vector([n, e, d], 1)
+        print(f'velocity: {[n, e, d]}') # show velocity
         yawmode = self.get_yaw_mode_F(velocity = [n, e, d])
         self.client.moveByVelocityAsync(float(n), float(e), float(d), duration=1, vehicle_name=self.drone_name, yaw_mode=yawmode).join()
         self.client.moveByVelocityAsync(0, 0, 0, 2, vehicle_name=self.drone_name).join()
         next_state = self.get_observation()
 
         reward, terminated, completed = self.computed_reward([n, e, d])
+
+        if terminated:
+            if completed:
+                print("Reach all targets and the mission is completed.")
+            else:
+                print("A collision occurred and the mission failed.")
 
         return next_state, reward, terminated, terminated, {'completed': completed}
 
@@ -228,10 +236,8 @@ class AirSimEnv(gym.Env):
     def check_curr_target_arrive(self, distance_to_target):
         if distance_to_target <= 0.5:
             del self.targets[0]
-            if self.targets:
-                print(f'Target arrive, get new target: {self.targets[0]}.')
-            else:
-                print("Arrive all targets, mission compeleted.")
+            # if self.targets:
+            #     print(f'Target arrive, get new target: {self.targets[0]}.')
     
     def get_yaw_mode_F(self, velocity):
         x, y, _ = velocity

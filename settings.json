@@ -4,6 +4,7 @@
   "SettingsVersion": 1.2,
   "SimMode": "Multirotor",
   "LogMessagesVisible": false,
+  "ViewMode":"",
   "Vehicles": {
     "drone_1": {
       "VehicleType": "SimpleFlight",
