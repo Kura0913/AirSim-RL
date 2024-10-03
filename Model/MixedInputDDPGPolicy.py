@@ -1,10 +1,10 @@
 import torch
+import torch.nn as nn
 import gymnasium as gym
-from typing import Dict, Any, Callable, Optional, List
+from typing import Dict, Any, Callable, Optional, List, Type
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.td3.policies import TD3Policy, Actor, ContinuousCritic
 from Model.FeaturesExtractor.CustomFeaturesExtractor import CustomFeaturesExtractor
-import numpy as np
 
 class MixedInputDDPGPolicy(TD3Policy):
     def __init__(
@@ -70,41 +70,30 @@ class MixedInputDDPGPolicy(TD3Policy):
     
 
 class DDPGActor(Actor):
-    def __init__(self, *args, **kwargs):
-        self.config = kwargs.pop('config', {})
-        super(DDPGActor, self).__init__(*args, **kwargs)
-
-    def extract_features(self, obs: torch.Tensor) -> torch.Tensor:
-        """
-        Preprocess the observation if needed and extract features.
-        """
-        assert self.features_extractor is not None, "No features extractor was set"
-        preprocessed_obs = self.preprocess_obs(obs, self.observation_space, normalize_images=self.normalize_images)
-        return self.features_extractor(preprocessed_obs)
+    def __init__(
+        self,
+        observation_space,
+        action_space,
+        net_arch: List[int],
+        features_extractor: nn.Module,
+        features_dim: int,
+        activation_fn: Type[nn.Module] = nn.ReLU,
+        normalize_images: bool = True,
+        config=None
+    ):
+        super().__init__(
+            observation_space,
+            action_space,
+            net_arch,
+            features_extractor,
+            features_dim,
+            activation_fn,
+            normalize_images
+        )
+        self.config = config
 
     def forward(self, obs: torch.Tensor) -> torch.Tensor:
-        # Extract features
         features = self.extract_features(obs)
-        latent_pi = self.latent_pi(features)
-        
-        # Output direction and speed
-        direction = self.mu(latent_pi)[:, :3]
-        speed = torch.sigmoid(self.mu(latent_pi)[:, 3])
-        
-        # Normalize direction
-        direction = direction / (torch.norm(direction, dim=1, keepdim=True) + 1e-8)
-        
-        # Combine direction and speed
-        action = direction * speed.unsqueeze(1)
-        
-        return action
+        velocity = self.mu(features)
 
-    def preprocess_obs(self, obs: torch.Tensor, observation_space: gym.spaces.Space, normalize_images: bool = True) -> torch.Tensor:
-        """
-        Preprocess observation to be to a neural network.
-        For images, it normalizes the values by dividing them by 255 if normalize_images is True.
-        """
-        if isinstance(observation_space, gym.spaces.Box):
-            if normalize_images and observation_space.shape[-1] == 3:
-                return obs.float() / 255.0
-        return obs.float()
+        return velocity
