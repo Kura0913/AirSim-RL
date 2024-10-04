@@ -91,9 +91,3 @@ class DDPGActor(Actor):
             normalize_images
         )
         self.config = config
-
-    def forward(self, obs: torch.Tensor) -> torch.Tensor:
-        features = self.extract_features(obs)
-        velocity = self.mu(features)
-
-        return velocity
