@@ -34,11 +34,11 @@ class RLModel:
             return DDPG(
                 MixedInputDDPGPolicy,
                 self.env,
+                learning_starts=10000,
                 verbose=1,
                 gamma=0.9999,
                 learning_rate=self.config['learning_rate'],
                 device=self.device,
-                replay_buffer_class=ReplayBuffer,
                 policy_kwargs={"config": self.config}
             )
         else:

@@ -160,7 +160,7 @@ class AirSimEnv(gym.Env):
                             state.kinematics_estimated.position.z_val])
         target_position = np.array(self.targets[0])
         distance_to_target = np.linalg.norm(position - target_position)
-        self.check_curr_target_arrive(distance_to_target)
+        arrive_reward = self.check_curr_target_arrive(distance_to_target)
         terminated, completed = self.check_done(distance_to_target)
 
         if terminated and completed:
@@ -168,54 +168,24 @@ class AirSimEnv(gym.Env):
         elif terminated and not completed:
             return self.collision_penalty, terminated, completed
         else:
-            # Continuous distance bonus
-            distance_reward = (self.prev_distance - distance_to_target) * 10
+            if distance_to_target < self.prev_distance or self.prev_distance == -1:
+                distance_reward = 5
+            else:
+                distance_reward = -3
+            # Save previous distance
             self.prev_distance = distance_to_target
 
-            # direction reward
-            direction_to_target = (target_position - position) / distance_to_target
-            current_direction = np.array(velocity) / (np.linalg.norm(velocity) + 1e-8)  # avoid dividing by zero
-            direction_reward = np.dot(direction_to_target, current_direction) * 5
-
-            # speed change penalty
-            if self.prev_velocity != -1:
-                velocity_change = np.linalg.norm(np.array(velocity) - np.array(self.prev_velocity))
-                velocity_change_penalty = max(0, velocity_change - 0.1) * self.smoothness_penalty_factor
-            else:
+            # Calculate the rate of change of velocity and apply a smoothness penalty
+            if self.prev_velocity == -1:
                 velocity_change_penalty = 0
+            else:
+                velocity_change_penalty = np.linalg.norm(np.array(velocity) - np.array(self.prev_velocity)) * self.smoothness_penalty_factor
+
+            # Save previous velocity
             self.prev_velocity = velocity
 
-            # Adaptive altitude bonus
-            target_height = target_position[2]
-            current_height = position[2]
-            height_diff = target_height - current_height
-            
-            # Calculate horizontal distance to target
-            horizontal_distance = np.linalg.norm(target_position[:2] - position[:2])
-            
-            # Adjust desired height based on horizontal distance
-            expected_height = current_height + height_diff * (1 - np.exp(-horizontal_distance / 10))
-            
-            # Altitude bonus: encourages the drone to gradually approach the target altitude
-            height_reward = -abs(current_height - expected_height) * 0.5
-            
-            # Vertical speed penalty: avoid excessive up and down movement
-            vertical_velocity = velocity[2]
-            vertical_velocity_penalty = -abs(vertical_velocity) * 0.2
-
-            # time penalty
-            time_penalty = -0.1
-
-            # Merge Rewards
-            reward = (distance_reward + 
-                    direction_reward - 
-                    velocity_change_penalty + 
-                    height_reward + 
-                    vertical_velocity_penalty + 
-                    time_penalty)
-
-            # Normalized rewards
-            reward = np.clip(reward, -10, 10)
+            # Get final reward
+            reward = arrive_reward + distance_reward + velocity_change_penalty
 
             return reward, False, False
 
@@ -236,8 +206,13 @@ class AirSimEnv(gym.Env):
     def check_curr_target_arrive(self, distance_to_target):
         if distance_to_target <= 0.5:
             del self.targets[0]
+            arrive_reward = 10
             # if self.targets:
             #     print(f'Target arrive, get new target: {self.targets[0]}.')
+        else:
+            arrive_reward = 0
+
+        return arrive_reward
     
     def get_yaw_mode_F(self, velocity):
         x, y, _ = velocity
