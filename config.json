@@ -22,5 +22,9 @@
         "lidar_mode":"./runs/lidar/test/",
         "all_sensors":"./runs/all_sensors/test/"
     },
-    "test_path": "path/to/test_folder/"
+    "test_path": "path/to/test_folder/",
+    "log_controller":{
+        "action": false,
+        "target_update": true
+    }
 }

@@ -128,7 +128,8 @@ class AirSimEnv(gym.Env):
         # else:
         #     speed = airsimtools.map_value(self.distance_range, self.maping_range, self.prev_distance)
         n, e, d = airsimtools.scale_and_normalize_vector([n, e, d], 1)
-        print(f'velocity: {[n, e, d]}') # show velocity
+        if self.config['log_controller']['action']:
+            print(f'velocity: {[n, e, d]}') # show velocity
         yawmode = self.get_yaw_mode_F(velocity = [n, e, d])
         self.client.moveByVelocityAsync(float(n), float(e), float(d), duration=1, vehicle_name=self.drone_name, yaw_mode=yawmode).join()
         self.client.moveByVelocityAsync(0, 0, 0, 2, vehicle_name=self.drone_name).join()
@@ -207,8 +208,8 @@ class AirSimEnv(gym.Env):
         if distance_to_target <= 0.5:
             del self.targets[0]
             arrive_reward = 10
-            # if self.targets:
-            #     print(f'Target arrive, get new target: {self.targets[0]}.')
+            if self.targets and self.config['log_controller']['target_update']:
+                print(f'Target arrive, get new target: {self.targets[0]}.')
         else:
             arrive_reward = 0
 
