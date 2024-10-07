@@ -40,7 +40,7 @@ class CustomActor(Actor):
         )
 
     def forward(self, obs):
-        features = self.extract_features(obs)
+        features = self.extract_features(obs, self.features_extractor)
 
         return self.mu(features)
 
@@ -79,7 +79,7 @@ class CustomCritic(ContinuousCritic):
         ) for _ in range(self.n_critics)])
 
     def forward(self, obs: torch.Tensor, actions: torch.Tensor) -> torch.Tensor:
-        features = self.extract_features(obs)
+        features = self.extract_features(obs, self.features_extractor)
         q_values = torch.cat([q_net(torch.cat([features, actions], dim=1)) for q_net in self.q_networks], dim=1)
         return q_values
 
