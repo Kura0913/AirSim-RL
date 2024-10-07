@@ -44,45 +44,6 @@ class CustomActor(Actor):
 
         return self.mu(features)
 
-class CustomCritic(ContinuousCritic):
-    def __init__(
-        self,
-        observation_space: spaces.Space,
-        action_space: spaces.Space,
-        net_arch: List[int],
-        features_extractor: nn.Module,
-        features_dim: int,
-        activation_fn: Type[nn.Module] = nn.ReLU,
-        normalize_images: bool = True,
-        n_critics: int = 2,
-        share_features_extractor: bool = True,
-    ):
-        super(CustomCritic, self).__init__(
-            observation_space,
-            action_space,
-            net_arch,
-            features_extractor,
-            features_dim,
-            activation_fn,
-            normalize_images,
-            n_critics,
-            share_features_extractor
-        )
-        self.features_dim = features_dim
-
-        self.q_networks = nn.ModuleList([nn.Sequential(
-            nn.Linear(self.features_dim + self.action_space.shape[0], 256),
-            nn.ReLU(),
-            nn.Linear(256, 128),
-            nn.ReLU(),
-            nn.Linear(128, 1)
-        ) for _ in range(self.n_critics)])
-
-    def forward(self, obs: torch.Tensor, actions: torch.Tensor) -> torch.Tensor:
-        features = self.extract_features(obs, self.features_extractor)
-        q_values = torch.cat([q_net(torch.cat([features, actions], dim=1)) for q_net in self.q_networks], dim=1)
-        return q_values
-
 class MixedInputDDPGPolicy(TD3Policy):
     def __init__(
         self,
@@ -131,9 +92,9 @@ class MixedInputDDPGPolicy(TD3Policy):
             normalize_images=self.normalize_images
         ).to(self.device)
 
-    def make_critic(self, features_extractor: Optional[BaseFeaturesExtractor] = None) -> CustomCritic:
+    def make_critic(self, features_extractor: Optional[BaseFeaturesExtractor] = None) -> ContinuousCritic:
         critic_kwargs = self._update_features_extractor(self.critic_kwargs, features_extractor)
-        return CustomCritic(
+        return ContinuousCritic(
             self.observation_space,
             self.action_space,
             net_arch=self.net_arch,
