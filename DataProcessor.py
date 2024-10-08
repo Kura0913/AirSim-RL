@@ -9,6 +9,7 @@ class DataProcessor:
         self.point_numbers = config["point_numbers"]
         self.resize_shape = tuple(config["resize"])
         self.mode = config["mode"]
+        self.grid_size = config["grid_size"]
 
     def process(self, lidar_data, depth_image, drone_position, target_position):
         """
@@ -64,7 +65,7 @@ class DataProcessor:
     
     def sample_point_cloud(self, point_cloud):
         """
-        Sample points from a point cloud.
+        Sample points from a point cloud using average sampling.
 
         Args:
         - point_cloud (np.ndarray): Raw point cloud data.
@@ -72,15 +73,43 @@ class DataProcessor:
         Returns:
         - torch.Tensor: Sampled point cloud data.
         """
-        if point_cloud is None:
+        if point_cloud is None or point_cloud.shape[0] == 0:
             return torch.zeros((self.point_numbers, 3), device=self.device)
+
+        # calculate point cloud edge
+        min_coords = np.min(point_cloud, axis=0)
+        max_coords = np.max(point_cloud, axis=0)
         
-        num_points_in_cloud = point_cloud.shape[0]
+        # calculate grid size
+        grid_sizes = (max_coords - min_coords) / self.grid_size
         
-        if num_points_in_cloud >= self.point_numbers:
-            choice = np.random.choice(num_points_in_cloud, self.point_numbers, replace=False)
-        else:
-            choice = np.random.choice(num_points_in_cloud, self.point_numbers, replace=True)
+        grid_indices = np.floor((point_cloud - min_coords) / grid_sizes).astype(int)
         
-        sampled_point_cloud = point_cloud[choice, :]
-        return torch.from_numpy(sampled_point_cloud).float()
+        # Create a dictionary to store the points in each grid.
+        grid_dict = {}
+        for i, point in enumerate(point_cloud):
+            grid_key = tuple(grid_indices[i])
+            if grid_key not in grid_dict:
+                grid_dict[grid_key] = []
+            grid_dict[grid_key].append(point)
+        
+        # Sample points from each grid.
+        sampled_points = []
+        points_per_grid = max(1, self.point_numbers // len(grid_dict))
+        
+        for grid_points in grid_dict.values():
+            n_points = min(len(grid_points), points_per_grid)
+            sampled_points.extend(np.random.choice(grid_points, n_points, replace=False))
+        
+        # If the sampled points are not enough, add them randomly from all points.
+        if len(sampled_points) < self.point_numbers:
+            additional_points = np.random.choice(point_cloud, self.point_numbers - len(sampled_points), replace=False)
+            sampled_points.extend(additional_points)
+        
+        # If too many points are sampled, redundant points are randomly deleted.
+        if len(sampled_points) > self.point_numbers:
+            sampled_points = np.random.choice(sampled_points, self.point_numbers, replace=False)
+        
+        sampled_point_cloud = np.array(sampled_points)
+        
+        return torch.from_numpy(sampled_point_cloud).float().to(self.device)

@@ -12,6 +12,7 @@
     "resize": [64, 64],
     "max_depth": 10,
     "max_action": 1,
+    "grid_size": 20,
     "train":{
         "camera_mode":"./runs/camera/train/",
         "lidar_mode":"./runs/lidar/train/",
