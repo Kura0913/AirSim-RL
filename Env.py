@@ -1,332 +1,172 @@
-import airsim
-import numpy as np
 import Tools.AirsimTools as airsimtools
-from DataProcessor import DataProcessor
-import time
 import gymnasium as gym
 from gymnasium import spaces
-import torch
+import airsim
+import numpy as np
 
-
-class AirSimEnv(gym.Env):
-    def __init__(self, drone_name, config, device, lidar_sensor="lidar", camera = "camera", target_name = "BP_Grid", spawn_object_name = "BP_spawn_point", distance_range=(0, 10), maping_range=(1, 3)):
-        super(AirSimEnv, self).__init__()
+class AirsimEnv(gym.Env):
+    def __init__(self, drone_name, config, camera_name = "camera", goal_name = "BP_Grid", 
+                 distance_sensor_list = ["front", "left", "right", "lfront", "rfront", "lfbottom", "rfbottom", "rbbottom", "lbbottom", 'top']):
+        # config setting
+        self.config = config
+        # env variable
+        self.drone_name = drone_name
+        self.camera_name = camera_name
+        self.goal_name = goal_name
+        self.distance_sensor_list = distance_sensor_list
+        self.target_resize = config['resize']
+        self.start_positon = [0, 0, 0]
+        # set airsim api client
         self.client = airsim.MultirotorClient()
         self.client.confirmConnection()
         self.client.enableApiControl(True, drone_name)
         self.client.armDisarm(True, drone_name)
-        self.config = config
-        self.processor = DataProcessor(config, device)
-        self.drone_name = drone_name
-        self.lidar_sensor = lidar_sensor
-        self.camera = camera
-        self.target_name = target_name
-        self.spawn_object_name = spawn_object_name
-        self.distance_range = distance_range
-        self.maping_range = maping_range 
-        self.spawn_points = airsimtools.get_targets(self.client, self.drone_name, self.client.simListSceneObjects(f'{self.spawn_object_name}[\w]*'), 2, 1)
-        self.targets = airsimtools.get_targets(self.client, self.drone_name, self.client.simListSceneObjects(f'{self.target_name}[\w]*'), 2, 1)
-        self.prev_velocity = -1
-        self.prev_distance = -1
-        self.max_distance_to_target = 30
-        self.complited_reward = 100
-        self.collision_penalty = -100  # Penalty for collision
-        self.distance_reward_factor = 1.0  # Reward scaling for distance to target
-        self.smoothness_penalty_factor = -0.1  # Penalty for sudden movement changes
-        # get observation space size
-        point_cloud_size = config['point_numbers'] * 3
-        depth_image_size = config['resize'][0] * config['resize'][1]
-        drone_position_size = 3
-        target_position_size = 3
-        total_obs_size = point_cloud_size + depth_image_size + drone_position_size + target_position_size
+        # statistical variables
+        self.steps = 0
+        self.total_reward = 0
+        self.episode = 0
+        self.episode_rewards = []
+        self.end_eposide = False
+        # define action sapce, observation space
+        self.action_space = spaces.Box(low=-1, high=1, shape=(3,))
+        self.observation_space = spaces.Dict({
+            'depth_image': spaces.Box(low=0, high=255, shape=(1, self.target_resize[0], self.target_resize[1])),
+            'position': spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+            'distance': spaces.Box(low=0, high=np.inf, shape=(1,))
+        })
 
-        # Define the observation space based on the config
-        self.observation_space = spaces.Box(
-            low=-np.inf,
-            high=np.inf,
-            shape=(total_obs_size,),
-            dtype=np.float32
-        )
-        # Define the action space
-        self.action_space = spaces.Box(low=-1, high=1, shape=(3,), dtype=np.float32)  # Example action space
+        self.goal_position = np.array(self._load_goal_position(2))
 
     def reset(self, seed=None):
         if seed is not None:
             np.random.seed(seed)
-        print("----------------------------------------------")
-        print("Reset Env...")
-        airsimtools.reset_drone_to_random_spawn_point(self.client, self.drone_name, self.spawn_points)
-        self.takeoff()
-        time.sleep(1)
-        self.targets = airsimtools.get_targets(self.client, self.drone_name, self.client.simListSceneObjects(f'{self.target_name}[\w]*'), 2, 1)
-        observation = self.get_observation()
-        return observation, dict()
+        airsimtools.reset_drone(self.client, self.drone_name)
+        self.client.takeoffAsync().join()
+        self.end_eposide = False
+        self.total_reward = 0
+        self.steps = 0
+        self.episode += 1
+        self.start_positon = airsimtools.get_drone_position_list(self.client, self.drone_name)
 
-    def takeoff(self):
-        self.client.takeoffAsync(1, vehicle_name=self.drone_name).join()
-
-    def get_lidar_data(self):
-        lidar_data = self.client.getLidarData(vehicle_name=self.drone_name, lidar_name=self.lidar_sensor)
-        if len(lidar_data.point_cloud) < 3:
-            return np.array([])
-        
-        points = np.array(lidar_data.point_cloud, dtype=np.float32).reshape(-1, 3)
-        return points
-
-    def get_depth_image(self):
-        responses = self.client.simGetImages([
-            airsim.ImageRequest("0", airsim.ImageType.DepthPerspective, True, False)
-        ], vehicle_name=self.drone_name)
-
-        if responses and responses[0].width != 0 and responses[0].height != 0:
-            # convert to np.array
-            img1d = np.array(responses[0].image_data_float, dtype=np.float32)
-            img2d = img1d.reshape(responses[0].height, responses[0].width)
-            return img2d
-        else:
-            return None
-
-    def get_target_list(self, object_name):
-        objects = self.client.simListSceneObjects(f'{object_name}[\w]*')
-        targets = airsimtools.get_targets(self.client, self.drone_name, objects, 2, 1)
-
-        return targets
-
-    def get_observation(self):
-        depth_image = self.get_depth_image()
-        lidar_data = self.get_lidar_data()
-        pose = self.client.simGetVehiclePose(self.drone_name)
-        drone_position = [float(pose.position.x_val), float(pose.position.y_val), float(pose.position.z_val)]
-        if self.targets:
-            curr_target = self.targets[0]
-        else:            
-            curr_target = drone_position
-
-        processed_data = self.processor.process(lidar_data, depth_image, drone_position, curr_target)
-    
-        if isinstance(processed_data, torch.Tensor):
-            processed_data = processed_data.cpu().numpy()
-
-        observation = {
-            "point_cloud": processed_data['point_cloud'].cpu().numpy(),
-            "depth_image": processed_data['depth_image'].cpu().numpy().transpose(1, 2, 0),
-            "drone_position": np.array(drone_position, dtype=np.float32),
-            "target_position": np.array(curr_target, dtype=np.float32)
-        }
-    
-        return np.concatenate([
-            observation['point_cloud'].flatten(),
-            observation['depth_image'].flatten(),
-            observation['drone_position'].flatten(),
-            observation['target_position'].flatten()
-        ])
+        return self._get_obs(), dict()
 
     def step(self, action):
+        self.steps += 1
+        # execute action
         n, e, d = action
-        # if self.prev_distance == -1:
-        #     speed = 3
-        # else:
-        #     speed = airsimtools.map_value(self.distance_range, self.maping_range, self.prev_distance)
-        n, e, d = airsimtools.scale_and_normalize_vector([n, e, d], 1)
-        if self.config['log_controller']['action']:
-            print(f'velocity: {[n, e, d]}') # show velocity
-        yawmode = self.get_yaw_mode_F(velocity = [n, e, d])
-        self.client.moveByVelocityAsync(float(n), float(e), float(d), duration=1, vehicle_name=self.drone_name, yaw_mode=yawmode).join()
-        self.client.moveByVelocityAsync(0, 0, 0, 2, vehicle_name=self.drone_name).join()
-        next_state = self.get_observation()
-
-        reward, terminated, completed = self.computed_reward([n, e, d])
-
-        if terminated:
-            if completed:
-                print("Reach all targets and the mission is completed.")
-            else:
-                print("A collision occurred and the mission failed.")
-
-        return next_state, reward, terminated, terminated, {'completed': completed}
-
-    def close(self):
-        self.client.armDisarm(False, self.drone_name)
-        self.client.enableApiControl(False, self.drone_name)
-
-    def computed_reward(self, velocity):
-        """
-        Calculate the reward function and determine if the episode should end based on the drone's state.
-
-        return: reward(bool), done(bool), completed(bool)
-        """
-        state = self.client.getMultirotorState(vehicle_name=self.drone_name)
-        position = np.array([state.kinematics_estimated.position.x_val,
-                            state.kinematics_estimated.position.y_val,
-                            state.kinematics_estimated.position.z_val])
-        target_position = np.array(self.targets[0])
-        distance_to_target = np.linalg.norm(position - target_position)
-        arrive_reward = self.check_curr_target_arrive(distance_to_target)
-        terminated, completed = self.check_done(distance_to_target)
-
-        if terminated and completed:
-            return self.complited_reward, terminated, completed
-        elif terminated and not completed:
-            return self.collision_penalty, terminated, completed
-        else:
-            if distance_to_target < self.prev_distance or self.prev_distance == -1:
-                distance_reward = 5
-            else:
-                distance_reward = -3
-            # Save previous distance
-            self.prev_distance = distance_to_target
-
-            # Calculate the rate of change of velocity and apply a smoothness penalty
-            if self.prev_velocity == -1:
-                velocity_change_penalty = 0
-            else:
-                velocity_change_penalty = np.linalg.norm(np.array(velocity) - np.array(self.prev_velocity)) * self.smoothness_penalty_factor
-
-            # Save previous velocity
-            self.prev_velocity = velocity
-
-            # Get final reward
-            reward = arrive_reward + distance_reward + velocity_change_penalty
-
-            return reward, False, False
-
-    def check_done(self, distance_to_target):
-        '''
-        return: done(bool), complete(bool)
-        '''
-        collision_info = self.client.simGetCollisionInfo(vehicle_name=self.drone_name)
-        # Calculate distance to the current target
-        if len(self.targets) == 0:
-            # No more targets, end the episode
-            return True, True        
-        elif collision_info.has_collided or distance_to_target >= self.max_distance_to_target:
-            # Collision or too far from the target, end the episode
-            return True, False
-        else:
-            return False, False
-    def check_curr_target_arrive(self, distance_to_target):
-        if distance_to_target <= 0.5:
-            del self.targets[0]
-            arrive_reward = 10
-            if self.targets and self.config['log_controller']['target_update']:
-                print(f'Target arrive, get new target: {self.targets[0]}.')
-        else:
-            arrive_reward = 0
-
-        return arrive_reward
+        yawmode = airsimtools.get_yaw_mode_F(velocity = [n, e, d])
+        self.client.moveByVelocityAsync(float(n), float(e), float(d), 1, yaw_mode=yawmode).join()
+        
+        obs = self._get_obs()
+        done, completed = self._check_done(obs)
+        reward = self._compute_reward(action, obs, done, completed)
+        info = {"completed": completed}
+        self.total_reward += reward
+        if done:
+            self.end_eposide = True
+            self.episode_rewards.append(self.total_reward)
+        
+        return obs, reward, done, done, info
     
-    def get_yaw_mode_F(self, velocity):
-        x, y, _ = velocity
-        speed = np.sqrt(x**2 + y**2)
+    def _load_goal_position(self, round_decimals):
+        goal_objects = self.client.simListSceneObjects(f'{self.goal_name}[\w]*')
+        for goal_object in goal_objects:
+            goal_position = self.client.simGetObjectPose(goal_object).position
+            goal_position = [np.round(goal_position.x_val, round_decimals), np.round(goal_position.y_val, round_decimals), np.round(goal_position.z_val, round_decimals)]
+            goal_position = airsimtools.check_negative_zero(goal_position[0], goal_position[1], goal_position[2])
         
-        # Set the minimum speed threshold, below which no rotation will occur
-        min_speed = 0.1
-        max_speed = 5
-        
-        # Set the maximum rotation angle (degrees)
-        max_rotation = 45
-        if self.prev_velocity == -1:
-            return airsim.YawMode(False, 0)
+        return goal_position
 
-        if speed < min_speed:
-            # The speed is too small, keep the current direction
-            if self.prev_velocity[0] == 0 and self.prev_velocity[1] == 0:
-                angle_in_degree = 0
-            else:
-                angle_in_degree = airsimtools.calculate_horizontal_rotation_angle(self.prev_velocity)
+    def _get_obs(self):
+        # get depth image
+        responses = self.client.simGetImages([airsim.ImageRequest("0", airsim.ImageType.DepthVis, True, False)])
+        depth_image = np.array(responses[0].image_data_float, dtype=np.float32)
+        depth_image = np.reshape(depth_image, (responses[0].height, responses[0].width))
+        depth_image = np.array(depth_image * 255, dtype=np.uint8)
+        depth_image_resized = np.resize(depth_image, self.target_resize)
+        depth_image_final = np.expand_dims(depth_image_resized, axis=0)
+        # get drone position
+        position = self.client.getMultirotorState().kinematics_estimated.position.to_numpy_array()
+
+        # calculate distance to goal position
+        distance = np.linalg.norm(position - self.goal_position)
+
+        return {
+            'depth_image': depth_image_final,
+            'position': position,
+            'distance': np.array([distance])
+        }
+
+    def _compute_reward(self, action, obs, done:bool, completed:bool, d_soft=2, d_hard=0.5):
+        r_t = 0
+        
+        # R_fly: reward for flying towards destination and following predefined route
+        distance_to_destination = np.linalg.norm(obs['position'] - self.goal_position)
+        distance_to_route = self._calculate_distance_to_route(obs['position'], self.start_positon, self.goal_position)
+        R_fly = -(distance_to_destination + distance_to_route)
+        
+        # R_goal: reward for reaching the destination
+        R_goal = 100 if done and completed else 0
+        
+        # R_collision: penalty for collision
+        R_collision = -100 if done and not completed else 0
+        
+        # R_margin: penalty for getting too close to obstacles
+        C1, C2 = 10, 20  # Constants to be tuned empirically
+        d_obstacle = self._get_min_distance_sensor_value()
+        if d_obstacle < d_hard:
+            R_margin = -C2 / d_obstacle
+        elif d_obstacle < d_soft:
+            R_margin = -C1 * (1 - d_obstacle / d_soft)
         else:
-            # Calculate target angle
-            target_angle = airsimtools.calculate_horizontal_rotation_angle(velocity)
-            
-            # Calculate current angle
-            current_angle = airsimtools.calculate_horizontal_rotation_angle(self.prev_velocity) if self.prev_velocity[0] != 0 or self.prev_velocity[1] != 0 else 0
-            
-            # Calculate angle difference
-            angle_diff = (target_angle - current_angle + 180) % 360 - 180
-            
-            # Adjust the rotation amplitude according to the speed
-            rotation_factor = min(speed / max_speed, 1)
-            max_rotation_this_step = max_rotation * rotation_factor
-            
-            # Limit rotation range
-            angle_in_degree = current_angle + max(-max_rotation_this_step, min(angle_diff, max_rotation_this_step))
+            R_margin = 0
         
-        return airsim.YawMode(False, angle_in_degree)
+        r_t = R_fly + R_goal + R_collision + R_margin
+        return r_t
 
-
-
-class AirSimMultiDroneEnv(gym.Env):
-    def __init__(self, config, drone_list, device):
-        super(AirSimMultiDroneEnv, self).__init__()
-        self.config = config
-        self.drones = {drone_name: AirSimEnv(drone_name, config, device) for drone_name in drone_list}
-        self.drone_list = drone_list
-
-        # Combine the observation spaces of all drones into a single observation space
-        obs_spaces = [self.drones[drone_name].observation_space.shape[0] for drone_name in drone_list]
-        total_obs_dim = sum(obs_spaces)
-        self.observation_space = spaces.Box(
-            low=-np.inf,
-            high=np.inf,
-            shape=(total_obs_dim,),
-            dtype=np.float32
-        )
-
-        # Combine the action spaces of all drones into a single action space
-        action_dim_per_drone = self.drones[drone_list[0]].action_space.shape[0]
-        self.action_space = spaces.Box(
-            low=-1,
-            high=1,
-            shape=(len(drone_list) * action_dim_per_drone,),
-            dtype=np.float32
-        )
-
-    def reset(self, seed=None):
-        if seed is not None:
-            np.random.seed(seed)  # Set the seed for reproducibility
-
-        observations = []
-        for drone_name in self.drone_list:
-            obs, _ = self.drones[drone_name].reset(seed)
-            print(f"Observation from {drone_name}: type={type(obs)}, shape={getattr(obs, 'shape', 'N/A')}")
-            if isinstance(obs, torch.Tensor):
-                obs = obs.cpu().numpy()
-            elif obs.ndim == 0:
-                print(f"Error: Reset returned a zero-dimensional array for drone {drone_name}")
-            observations.append(obs)
-
-        if not observations:
-            print("Error: Observations list is empty")
-        elif any(obs.ndim == 0 for obs in observations):
-            print("Error: One or more observations are zero-dimensional")
-
-        return np.concatenate(observations)
-
-    def step(self, action):
-        actions_per_drone = np.split(action, len(self.drone_list))
-        next_states = [0] * len(self.drone_list)
-        rewards = [0] * len(self.drone_list)
-        terminated = [False] * len(self.drone_list)
-        completed = [False] * len(self.drone_list)
-
-        for i, drone_name in enumerate(self.drone_list):
-            if not terminated[i]:
-                next_state, reward, done, _, info = self.drones[drone_name].step(actions_per_drone[i])
-                next_states[i] = next_state
-                rewards[i] = reward
-                terminated[i] = done
-                completed[i] = info.get('completed', False)
-            else:                
-                next_state = next_states[i]
-                reward = 0
-
-            next_states.append(next_states[i])
-            rewards.append(rewards[i])
-
-        done = all(terminated)
-
-        return np.concatenate(next_states), np.sum(rewards), done, done, {'completed': any(completed)}
+    def _check_done(self, obs):
+        '''
+        Return: done(bool), mission_completed(bool)
+        '''
+        collision_info = self.client.simGetCollisionInfo()
+        distance = obs['distance'][0]
+        if collision_info.has_collided or self.steps >= self.config['max_steps']: # collision happend or steps reach max_steps
+            return True, False
+        if distance < 0.1: # reach destination
+            return True, True
+        return False, False # episode continue
 
     def close(self):
-        for drone_name in self.drone_list:
-            self.drones[drone_name].close()
+        self.client.enableApiControl(False)
+
+    def _get_min_distance_sensor_value(self):
+        distance_min_value = -1
+        for distance_sensor in self.distance_sensor_list:
+            value = self.client.getDistanceSensorData(distance_sensor, self.drone_name).distance
+            if value < distance_min_value or distance_min_value < 0:
+                distance_min_value = value
+        
+        return distance_min_value
+    
+    def _calculate_distance_to_route(self, current_position, start_point, end_point):
+        # convet variable to numpy array
+        p = np.array(current_position)
+        a = np.array(start_point)
+        b = np.array(end_point)
+        
+        ab = b - a
+        ap = p - a
+        
+        # calcuate projection
+        projection = np.dot(ap, ab) / np.dot(ab, ab)
+        
+        # limit the projection on the route
+        projection = np.clip(projection, 0, 1)
+        
+        # calcuate closest point
+        closest_point = a + projection * ab
+        
+        # calcuate distance
+        distance = np.linalg.norm(p - closest_point)
+        
+        return distance

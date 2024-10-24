@@ -1,41 +1,33 @@
+from Env import AirsimEnv
+from Agent import DDPGAgent, PPOAgent
+from CustomCallback import CustomCallback
+from datetime import datetime
 import json
-from Env import AirSimMultiDroneEnv, AirSimEnv
-from Model.RLModel import RLModel
 import os
-import numpy as np
-import matplotlib.pyplot as plt
-import torch
 
-def save_training_data(save_path):
-    rewards = np.load(save_path + "episode_rewards.npy")
-    losses = np.load(save_path + "episode_losses.npy")
+def train_ddpg(drone_name, config, folder_name):
+    env = AirsimEnv(drone_name, config)
+    agent = DDPGAgent(env, config)
+    callback_class = CustomCallback(config, folder_name)
+    agent.train(total_timesteps=config['episodes'] * config['max_steps'], callback=callback_class)
+    agent.save(f"{config['train']}{folder_name}/ddpg_model.pth")
 
-    plt.figure(figsize=(12, 6))
-    plt.plot(rewards)
-    plt.xlabel('Episodes')
-    plt.ylabel('Reward')
-    plt.title('Episode Rewards Over Time')
-    plt.savefig(save_path + 'episode_rewards.png')
-    plt.close()
-
-    plt.figure(figsize=(12, 6))
-    plt.plot(losses)
-    plt.xlabel('Episodes')
-    plt.ylabel('Loss')
-    plt.title('Training Loss Over Time')
-    plt.savefig(save_path + 'episode_losses.png')
-    plt.close()
+def train_ppo(drone_name, config, folder_name):
+    env = AirsimEnv(drone_name, config)
+    agent = PPOAgent(env, config)
+    callback_class = CustomCallback(config, folder_name)
+    agent.train(total_timesteps=config['episodes'] * config['max_steps'], callback=callback_class)
+    agent.save(f"{config['train']}{folder_name}/ppo_model.pth")
 
 def load_config():
     with open('config.json', 'r') as file:
         return json.load(file)
 
-def make_env(env_id, config, drone_list, device):
-    """Create subprocess environment function"""
-    def _init():
-        env = AirSimMultiDroneEnv(config, drone_list, device)
-        return env
-    return _init
+def load_drone_name():
+    drone_list = get_drone_names(os.path.expanduser("~\\Documents\\AirSim\\settings.json"))
+    drone_name = drone_list[0]  # Use only the first drone for single drone training
+
+    return drone_name
 
 def get_drone_names(settings_path):
         with open(settings_path, "r") as file:
@@ -44,28 +36,15 @@ def get_drone_names(settings_path):
         print(f"drone list: {drone_names}")
         return drone_names
 
-def run_training_single():
-    # load config
+def main():
+    drone_name = load_drone_name()
     config = load_config()
-    if config['device'] == 'cuda':
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    else:
-        device = torch.device("cpu")
-    print(device)  # Output: "cuda" if GPU is available, otherwise "cpu"
+    folder_name = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-    # Create a single drone environment
-    drone_list = get_drone_names(os.path.expanduser("~\\Documents\\AirSim\\settings.json"))
-    drone_name = drone_list[0]  # Use only the first drone for single drone training
-    env = AirSimEnv(drone_name, config, device)  # Directly create the environment
-
-    # Initialize RL model
-    rl_model = RLModel(config, env, device)
-
-    # Start training
-    print(f"Training with RL algorithm: {config['rl_algorithm']}")
-    save_path = rl_model.train()
-    print("Training completed.")
-    save_training_data(save_path)
+    if config["rl_algorithm"] == "DDPG":
+        train_ddpg(drone_name, config, folder_name)
+    elif config["rl_algorithm"] == "PPO":
+        train_ppo(drone_name, config, folder_name)
 
 if __name__ == "__main__":
-    run_training_single()
+    main()

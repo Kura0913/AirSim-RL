@@ -1,31 +1,19 @@
 {
     "rl_algorithm": "DDPG",
     "device": "cuda",
-    "mode":"camera_mode",
     "load_model": false,
     "model_load_path": "path/to/pretrained_model.pth",
-    "max_steps":500,
-    "timesteps": 600000,
+    "max_steps":300,
+    "episodes":7000,
+    "save_episodes": [3000, 5500, 7000],
     "train_infinite": false,
-    "point_numbers": 512,
     "learning_rate": 0.0001,
     "resize": [64, 64],
     "max_depth": 10,
     "max_action": 1,
     "grid_size": 20,
-    "train":{
-        "camera_mode":"./runs/camera/train/",
-        "lidar_mode":"./runs/lidar/train/",
-        "all_sensors":"./runs/all_sensors/train/"
-    },
-    "test":{
-        "camera_mode":"./runs/camera/test/",
-        "lidar_mode":"./runs/lidar/test/",
-        "all_sensors":"./runs/all_sensors/test/"
-    },
-    "test_path": "path/to/test_folder/",
-    "log_controller":{
-        "action": false,
-        "target_update": true
-    }
+    "train": "./run/train/",
+    "test":"./run/test/",
+
+    "test_path": "path/to/test_folder/"
 }

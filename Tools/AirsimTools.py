@@ -1,7 +1,7 @@
 import numpy as np
 import math
 import airsim
-from ShortestPath import TravelerShortestPath as tsp
+from Tools.ShortestPath import TravelerShortestPath as tsp
 
 # check the value wheather equals to "negative zero",if yes, set them to 0.0
 def check_negative_zero(x, y, z):
@@ -116,3 +116,18 @@ def reset_drone_to_random_spawn_point(client:airsim.MultirotorClient, drone_name
     pose = airsim.Pose(spawn_point, orientation)
     client.simSetVehiclePose(pose, True, drone_name)
     return spawn_point
+
+def reset_drone(client:airsim.MultirotorClient, drone_name):
+    client.reset()
+    client.enableApiControl(True, drone_name)
+    client.armDisarm(True, drone_name)
+
+def get_drone_position(client:airsim.MultirotorClient, drone_name):
+    pose = client.simGetVehiclePose(drone_name)
+    
+    return pose.position
+
+def get_drone_position_list(client:airsim.MultirotorClient, drone_name):
+    position = client.simGetVehiclePose(drone_name).position
+    
+    return [position.x_val, position.y_val, position.z_val]
