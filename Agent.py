@@ -16,6 +16,7 @@ class DDPGAgent:
             env,
             policy_kwargs=policy_kwargs,
             verbose=1,
+            learning_starts=20000,
             gamma=0.9999,
             learning_rate=self.config["learning_rate"],
             device = self.config['device']

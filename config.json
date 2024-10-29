@@ -1,6 +1,6 @@
 {
     "rl_algorithm": "DDPG",
-    "device": "cuda",
+    "device": "cuda:0",
     "load_model": false,
     "model_load_path": "path/to/pretrained_model.pth",
     "max_steps":300,

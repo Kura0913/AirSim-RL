@@ -31,7 +31,7 @@ class CustomCallback(BaseCallback):
             if self.curr_episode in self.save_episodes:
                 path = f"{self.config['train']}{self.folder_name}/"
                 os.makedirs(path, exist_ok=True)
-                model_path = f"{path}{self.config['algorithm'].lower()}_model_episode_{self.curr_episode}.pth"
+                model_path = f"{path}{self.config['rl_algorithm'].lower()}_model_episode_{self.curr_episode}.pth"
                 self.model.save(model_path)
                 print(f"Model saved at episode {self.curr_episode}")
 

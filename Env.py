@@ -54,8 +54,7 @@ class AirsimEnv(gym.Env):
         self.steps += 1
         # execute action
         n, e, d = action
-        yawmode = airsimtools.get_yaw_mode_F(velocity = [n, e, d])
-        self.client.moveByVelocityAsync(float(n), float(e), float(d), 1, yaw_mode=yawmode).join()
+        self.client.moveByVelocityAsync(float(n), float(e), float(d), 1).join()
         
         obs = self._get_obs()
         done, completed = self._check_done(obs)
@@ -103,7 +102,12 @@ class AirsimEnv(gym.Env):
         # R_fly: reward for flying towards destination and following predefined route
         distance_to_destination = np.linalg.norm(obs['position'] - self.goal_position)
         distance_to_route = self._calculate_distance_to_route(obs['position'], self.start_positon, self.goal_position)
-        R_fly = -(distance_to_destination + distance_to_route)
+
+        max_possible_distance = np.linalg.norm(self.goal_position - self.start_positon)
+        progress = 1.0 - (distance_to_destination / max_possible_distance)
+        route_adherence = 1.0 - min(1.0, distance_to_route / d_soft)
+        
+        R_fly = 5.0 * (progress + route_adherence)
         
         # R_goal: reward for reaching the destination
         R_goal = 100 if done and completed else 0
@@ -170,3 +174,27 @@ class AirsimEnv(gym.Env):
         distance = np.linalg.norm(p - closest_point)
         
         return distance
+    def _calculate_distance_to_route(self, current_pos, start_pos, goal_pos):
+        # convet variable to numpy array
+        current_pos = np.array(current_pos)
+        start_pos = np.array(start_pos)
+        goal_pos = np.array(goal_pos)
+        # Vector calculation
+        line_vec = goal_pos - start_pos
+        point_vec = current_pos - start_pos
+        line_len = np.linalg.norm(line_vec)
+        line_unitvec = line_vec / line_len
+        
+        # Calculate projection
+        point_proj_len = np.dot(point_vec, line_unitvec)
+        
+        if point_proj_len < 0:
+            # Click in front of the starting point
+            return np.linalg.norm(current_pos - start_pos)
+        elif point_proj_len > line_len:
+            # Click behind the end point
+            return np.linalg.norm(current_pos - goal_pos)
+        else:
+            # Point in the middle of the line segment and calculate the vertical distance
+            point_proj = start_pos + line_unitvec * point_proj_len
+            return np.linalg.norm(current_pos - point_proj)
