@@ -152,28 +152,6 @@ class AirsimEnv(gym.Env):
         
         return distance_min_value
     
-    def _calculate_distance_to_route(self, current_position, start_point, end_point):
-        # convet variable to numpy array
-        p = np.array(current_position)
-        a = np.array(start_point)
-        b = np.array(end_point)
-        
-        ab = b - a
-        ap = p - a
-        
-        # calcuate projection
-        projection = np.dot(ap, ab) / np.dot(ab, ab)
-        
-        # limit the projection on the route
-        projection = np.clip(projection, 0, 1)
-        
-        # calcuate closest point
-        closest_point = a + projection * ab
-        
-        # calcuate distance
-        distance = np.linalg.norm(p - closest_point)
-        
-        return distance
     def _calculate_distance_to_route(self, current_pos, start_pos, goal_pos):
         # convet variable to numpy array
         current_pos = np.array(current_pos)
