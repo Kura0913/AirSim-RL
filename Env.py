@@ -63,7 +63,7 @@ class AirsimEnv(gym.Env):
         self.client.moveByVelocityAsync(0.0, 0.0, 0.0, 0.2, vehicle_name=self.drone_name).join()
         
         obs = self._get_obs()
-        done, completed = self._check_done(obs)
+        done, completed, arrive_max_steps = self._check_done(obs)
         reward = self.reward_calculator._compute_reward(action, obs, self.steps, done, completed)
         info = {"completed": completed}
         self.total_reward += reward
@@ -111,15 +111,17 @@ class AirsimEnv(gym.Env):
 
     def _check_done(self, obs):
         '''
-        Return: done(bool), mission_completed(bool)
+        Return: done(bool), mission_completed(bool), arrive_max_steps(bool)
         '''
         collision_info = self.client.simGetCollisionInfo()
         distance = obs['distance'][0]
-        if collision_info.has_collided or self.steps >= self.config['max_steps']: # collision happend or steps reach max_steps
-            return True, False
+        if collision_info.has_collided: # collision happend or steps reach max_steps
+            return True, False, False
         if distance < 0.1: # reach destination
-            return True, True
-        return False, False # episode continue
+            return True, True, False
+        if self.steps >= self.config['max_steps']:
+            return True, False, True
+        return False, False, False # episode continue
 
     def close(self):
         self.client.enableApiControl(False)

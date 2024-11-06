@@ -3,7 +3,7 @@
     "device": "cuda:0",
     "load_model": false,
     "model_load_path": "path/to/pretrained_model.pth",
-    "max_steps":300,
+    "max_steps":500,
     "episodes":7000,
     "save_episodes": [3000, 5500, 7000],
     "train_infinite": false,

@@ -195,15 +195,15 @@ class DroneRewardCalculator:
         safety_level = max(0.0, min(1.0, safety_level))
         
         if safety_level > 0.8:
-            return 1.0, 0.5, 0.3  # margin, action, step
+            return 1.0, 0.7, 0.3  # margin, action, step
         elif safety_level > 0.5:
             return 1.0, 0.3, 0.2
         else:
-            return 1.0, 0.1, 0.1
+            return 1.0, 0.0, 0.1
         
-    def _compute_reward(self, action, obs, curr_step, done:bool, completed:bool):
+    def _compute_reward(self, action, obs, curr_step, done:bool, completed:bool, arrive_max_steps:bool):
         # R_collision: penalty for collision
-        R_collision = -100 if done and not completed else 0
+        R_collision = -100 if done and not completed and not arrive_max_steps else 0
         
         # Get the distance values ​​of all sensors
         sensor_distances = self._get_all_sensor_distances()        
@@ -226,20 +226,20 @@ class DroneRewardCalculator:
         # step_reward = self._calculate_step_reward(curr_step, self.max_steps)
         
         # calculate total reward
-        # r_t = (
-        #     R_fly +
-        #     margin_weight * R_margin +
-        #     action_weight * action_reward +
-        #     step_weight * step_reward +
-        #     R_goal +
-        #     R_collision
-        # )
         r_t = (
             R_fly +
-            R_margin +
+            margin_weight * R_margin +
+            action_weight * action_reward +
+            # step_weight * step_reward +
             R_goal +
             R_collision
         )
+        # r_t = (
+        #     R_fly +
+        #     R_margin +
+        #     R_goal +
+        #     R_collision
+        # )
         # print(f"total_reward: {r_t}")
         return r_t
     
