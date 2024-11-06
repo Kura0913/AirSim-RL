@@ -7,13 +7,12 @@
     "episodes":7000,
     "save_episodes": [3000, 5500, 7000],
     "train_infinite": false,
-    "learning_rate": 0.0001,
+    "learning_rate": 3e-4,
     "resize": [64, 64],
     "max_depth": 10,
     "max_action": 1,
     "grid_size": 20,
     "train": "./run/train/",
     "test":"./run/test/",
-
     "test_path": "path/to/test_folder/"
 }

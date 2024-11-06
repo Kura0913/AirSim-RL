@@ -1,11 +1,13 @@
 import Tools.AirsimTools as airsimtools
+from RewardCalculator import DroneRewardCalculator
 import gymnasium as gym
 from gymnasium import spaces
 import airsim
 import numpy as np
+import time
 
 class AirsimEnv(gym.Env):
-    def __init__(self, drone_name, config, camera_name = "camera", goal_name = "BP_Grid", 
+    def __init__(self, drone_name, config, camera_name = "camera", goal_name = "BP_Grid", start_point_name = "BP_StartPoint",
                  distance_sensor_list = ["front", "left", "right", "lfront", "rfront", "lfbottom", "rfbottom", "rbbottom", "lbbottom", 'top']):
         # config setting
         self.config = config
@@ -13,9 +15,9 @@ class AirsimEnv(gym.Env):
         self.drone_name = drone_name
         self.camera_name = camera_name
         self.goal_name = goal_name
+        self.start_point_name = start_point_name
         self.distance_sensor_list = distance_sensor_list
         self.target_resize = config['resize']
-        self.start_positon = [0, 0, 0]
         # set airsim api client
         self.client = airsim.MultirotorClient()
         self.client.confirmConnection()
@@ -35,18 +37,21 @@ class AirsimEnv(gym.Env):
             'distance': spaces.Box(low=0, high=np.inf, shape=(1,))
         })
 
+        self.start_pose = self._load_start_point()
+        self.start_position = [self.start_pose.position.x_val, self.start_pose.position.y_val, self.start_pose.position.z_val]
         self.goal_position = np.array(self._load_goal_position(2))
+        # reward calculator
+        self.reward_calculator = DroneRewardCalculator(self.client, self.distance_sensor_list, self.drone_name, self.start_position, self.goal_position, self.config['max_steps'])
 
     def reset(self, seed=None):
         if seed is not None:
             np.random.seed(seed)
         airsimtools.reset_drone(self.client, self.drone_name)
-        self.client.takeoffAsync().join()
+        self.client.simSetVehiclePose(self.start_pose, True, vehicle_name=self.drone_name)
         self.end_eposide = False
         self.total_reward = 0
         self.steps = 0
         self.episode += 1
-        self.start_positon = airsimtools.get_drone_position_list(self.client, self.drone_name)
 
         return self._get_obs(), dict()
 
@@ -54,11 +59,12 @@ class AirsimEnv(gym.Env):
         self.steps += 1
         # execute action
         n, e, d = action
-        self.client.moveByVelocityAsync(float(n), float(e), float(d), 1).join()
+        self.client.moveByVelocityAsync(float(n), float(e), float(d), 1, vehicle_name=self.drone_name).join()
+        self.client.moveByVelocityAsync(0.0, 0.0, 0.0, 0.2, vehicle_name=self.drone_name).join()
         
         obs = self._get_obs()
         done, completed = self._check_done(obs)
-        reward = self._compute_reward(action, obs, done, completed)
+        reward = self.reward_calculator._compute_reward(action, obs, self.steps, done, completed)
         info = {"completed": completed}
         self.total_reward += reward
         if done:
@@ -67,6 +73,13 @@ class AirsimEnv(gym.Env):
         
         return obs, reward, done, done, info
     
+    def _load_start_point(self):
+        player_start_objects = self.client.simListSceneObjects(f'{self.start_point_name}[\w]*')
+        for player_start_object in player_start_objects:
+            start_pose = self.client.simGetObjectPose(player_start_object)
+
+        return start_pose
+
     def _load_goal_position(self, round_decimals):
         goal_objects = self.client.simListSceneObjects(f'{self.goal_name}[\w]*')
         for goal_object in goal_objects:
@@ -96,38 +109,6 @@ class AirsimEnv(gym.Env):
             'distance': np.array([distance])
         }
 
-    def _compute_reward(self, action, obs, done:bool, completed:bool, d_soft=2, d_hard=0.5):
-        r_t = 0
-        
-        # R_fly: reward for flying towards destination and following predefined route
-        distance_to_destination = np.linalg.norm(obs['position'] - self.goal_position)
-        distance_to_route = self._calculate_distance_to_route(obs['position'], self.start_positon, self.goal_position)
-
-        max_possible_distance = np.linalg.norm(self.goal_position - self.start_positon)
-        progress = 1.0 - (distance_to_destination / max_possible_distance)
-        route_adherence = 1.0 - min(1.0, distance_to_route / d_soft)
-        
-        R_fly = 5.0 * (progress + route_adherence)
-        
-        # R_goal: reward for reaching the destination
-        R_goal = 100 if done and completed else 0
-        
-        # R_collision: penalty for collision
-        R_collision = -100 if done and not completed else 0
-        
-        # R_margin: penalty for getting too close to obstacles
-        C1, C2 = 10, 20  # Constants to be tuned empirically
-        d_obstacle = self._get_min_distance_sensor_value()
-        if d_obstacle < d_hard:
-            R_margin = -C2 / d_obstacle
-        elif d_obstacle < d_soft:
-            R_margin = -C1 * (1 - d_obstacle / d_soft)
-        else:
-            R_margin = 0
-        
-        r_t = R_fly + R_goal + R_collision + R_margin
-        return r_t
-
     def _check_done(self, obs):
         '''
         Return: done(bool), mission_completed(bool)
@@ -142,37 +123,3 @@ class AirsimEnv(gym.Env):
 
     def close(self):
         self.client.enableApiControl(False)
-
-    def _get_min_distance_sensor_value(self):
-        distance_min_value = -1
-        for distance_sensor in self.distance_sensor_list:
-            value = self.client.getDistanceSensorData(distance_sensor, self.drone_name).distance
-            if value < distance_min_value or distance_min_value < 0:
-                distance_min_value = value
-        
-        return distance_min_value
-    
-    def _calculate_distance_to_route(self, current_pos, start_pos, goal_pos):
-        # convet variable to numpy array
-        current_pos = np.array(current_pos)
-        start_pos = np.array(start_pos)
-        goal_pos = np.array(goal_pos)
-        # Vector calculation
-        line_vec = goal_pos - start_pos
-        point_vec = current_pos - start_pos
-        line_len = np.linalg.norm(line_vec)
-        line_unitvec = line_vec / line_len
-        
-        # Calculate projection
-        point_proj_len = np.dot(point_vec, line_unitvec)
-        
-        if point_proj_len < 0:
-            # Click in front of the starting point
-            return np.linalg.norm(current_pos - start_pos)
-        elif point_proj_len > line_len:
-            # Click behind the end point
-            return np.linalg.norm(current_pos - goal_pos)
-        else:
-            # Point in the middle of the line segment and calculate the vertical distance
-            point_proj = start_pos + line_unitvec * point_proj_len
-            return np.linalg.norm(current_pos - point_proj)

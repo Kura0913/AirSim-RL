@@ -119,8 +119,9 @@ def reset_drone_to_random_spawn_point(client:airsim.MultirotorClient, drone_name
 
 def reset_drone(client:airsim.MultirotorClient, drone_name):
     client.reset()
-    client.enableApiControl(True, drone_name)
     client.armDisarm(True, drone_name)
+    client.enableApiControl(True, drone_name)
+    client.takeoffAsync(1, vehicle_name=drone_name).join()
 
 def get_drone_position(client:airsim.MultirotorClient, drone_name):
     pose = client.simGetVehiclePose(drone_name)

@@ -21,32 +21,51 @@ class CustomActor(Actor):
             action_space,
             features_extractor=features_extractor,
             normalize_images=normalize_images,
-            net_arch = net_arch,
-            features_dim = features_dim,
+            net_arch=net_arch,
+            features_dim=features_dim,
         )
 
-        self.net_arch = net_arch
         self.features_dim = features_dim
-        self.activation_fn = activation_fn
-
         action_dim = get_action_dim(self.action_space)
         
-        custom_net_arch = [256, 256, 256]
+        self.fc1 = nn.Linear(features_dim, 32)  # First FC layer
+        self.fc2 = nn.Linear(32, 32)            # Second FC layer
+        self.fc3 = nn.Linear(32, action_dim)    # Output layer (3 dimensions for your case)
         
-        actor_net = [
-            nn.Linear(features_dim, custom_net_arch[0]),
-            nn.ReLU(),
-            nn.Linear(custom_net_arch[0], custom_net_arch[1]),
-            nn.Hardswish(),
-            nn.Linear(custom_net_arch[1], custom_net_arch[2]),
-            nn.Hardswish(),
-            nn.Linear(custom_net_arch[2], action_dim),            
-        ]
+        # Use Softmax as the activation function of the middle layer
+        self.softmax = nn.Softmax(dim=-1)
         
-        # Deterministic action
-        self.mu = nn.Sequential(*actor_net)
+        # Initialize weights
+        self._init_weights()
+    
+    def _init_weights(self):
+        """Initialize the weights using He initialization"""
+        nn.init.kaiming_uniform_(self.fc1.weight, nonlinearity='linear')
+        nn.init.kaiming_uniform_(self.fc2.weight, nonlinearity='linear')
+        nn.init.kaiming_uniform_(self.fc3.weight, nonlinearity='linear')
+        
+        # Initialize biases to zero
+        nn.init.zeros_(self.fc1.bias)
+        nn.init.zeros_(self.fc2.bias)
+        nn.init.zeros_(self.fc3.bias)
     
     def forward(self, obs: torch.Tensor) -> torch.Tensor:
-        # assert deterministic, 'The TD3 actor only outputs deterministic actions'
+        # Extract features from the observation
         features = self.extract_features(obs, self.features_extractor)
-        return torch.tanh(self.mu(features))
+        
+        # Apply network layers with activations exactly as in the paper
+        x = self.softmax(self.fc1(features))
+        x = self.softmax(self.fc2(x))
+        # Final layer uses linear activation (no activation function)
+        actions = self.fc3(x)
+        
+        # Bound the actions to [-1, 1] using tanh
+        # This is a common practice in continuous action spaces
+        return torch.tanh(actions)
+    
+    def scale_action(self, action: torch.Tensor) -> torch.Tensor:
+        """Scale the actions to the correct range if needed"""
+        action_space_low = torch.tensor(self.action_space.low, device=action.device)
+        action_space_high = torch.tensor(self.action_space.high, device=action.device)
+        
+        return 0.5 * (action_space_high - action_space_low) * action + 0.5 * (action_space_high + action_space_low)
