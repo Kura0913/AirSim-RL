@@ -64,7 +64,7 @@ class AirsimEnv(gym.Env):
         
         obs = self._get_obs()
         done, completed, arrive_max_steps = self._check_done(obs)
-        reward = self.reward_calculator._compute_reward(action, obs, self.steps, done, completed)
+        reward = self.reward_calculator._compute_reward(action, obs, self.steps, done, completed, arrive_max_steps)
         info = {"completed": completed}
         self.total_reward += reward
         if done:
