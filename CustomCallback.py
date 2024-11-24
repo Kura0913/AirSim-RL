@@ -128,7 +128,7 @@ class CustomCallback(BaseCallback):
             avg_path = f"{path}moving_average_rewards{episode_str}.png"
             completion_path = f"{path}completion_rate{episode_str}.png"
             
-            # 初始化數據變量
+            # Initialize data variables
             moving_avg = None
             completion_rates = []
             final_rate = 0.0
@@ -208,6 +208,8 @@ class CustomCallback(BaseCallback):
             plt.xlabel('Episode', fontsize=10)
             plt.ylabel('Completion Rate (%)', fontsize=10)
             plt.grid(True, linestyle='--', alpha=0.7)
+            # range: 0-100%
+            plt.ylim(0, 100)
             
             plt.gca().xaxis.set_major_locator(plt.MaxNLocator(integer=True))
             
@@ -249,3 +251,37 @@ class CustomCallback(BaseCallback):
 
     def get_episode_rewards(self):
         return self.episode_rewards
+    
+class HumanGuidedCallback(CustomCallback):
+    def __init__(self, config, folder_name, verbose=0):
+        super().__init__(config, folder_name, verbose)
+        self.demo_rewards = []
+        self.demo_episodes = 0
+        
+    def _on_step(self) -> bool:
+        result = super()._on_step()
+        
+        # Track demonstration statistics
+        if hasattr(self.model, 'demo_buffer'):
+            demo_size = len(self.model.demo_buffer.rewards)
+            if demo_size > 0:
+                avg_demo_reward = np.mean(self.model.demo_buffer.rewards[:demo_size])
+                self.demo_rewards.append(avg_demo_reward)
+        
+        return result
+    
+    def _save_training_plots(self, episode_str=""):
+        super()._save_training_plots(episode_str)
+        
+        # Add demonstration statistics plot
+        if self.demo_rewards:
+            path = f"{self.config['train']}{self.folder_name}/"
+            plt.figure(figsize=(12, 6))
+            plt.plot(self.demo_rewards, label='Demo Rewards')
+            plt.plot(self.episode_rewards, label='Training Rewards')
+            plt.title('Training vs Demonstration Rewards')
+            plt.xlabel('Episode')
+            plt.ylabel('Reward')
+            plt.legend()
+            plt.savefig(f"{path}demo_comparison{episode_str}.png")
+            plt.close()

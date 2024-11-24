@@ -16,6 +16,7 @@ class CustomFeaturesExtractor(BaseFeaturesExtractor):
         
         # Linear layers for position and distance
         self.position_net = nn.Linear(3, 32)
+        self.goal_position_net = nn.Linear(3, 32)
         self.distance_net = nn.Linear(1, 32)
 
     def forward(self, observations: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -23,6 +24,7 @@ class CustomFeaturesExtractor(BaseFeaturesExtractor):
         depth_features = depth_features.view(depth_features.size(0), -1)
         
         position_features = self.position_net(observations["position"])
+        goal_position_features = self.goal_position_net(observations['goal'])
         distance_features = self.distance_net(observations["distance"])
         
-        return torch.cat([depth_features, position_features, distance_features], dim=1)
+        return torch.cat([depth_features, position_features, goal_position_features, distance_features], dim=1)

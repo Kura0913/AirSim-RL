@@ -2,6 +2,7 @@ import numpy as np
 import math
 import airsim
 from Tools.ShortestPath import TravelerShortestPath as tsp
+import time
 
 # check the value wheather equals to "negative zero",if yes, set them to 0.0
 def check_negative_zero(x, y, z):

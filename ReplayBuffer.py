@@ -76,3 +76,59 @@ class PrioritizedReplayBuffer(DictReplayBuffer):
     
     def update_priorities(self, indices: np.ndarray, priorities: np.ndarray) -> None:
         self.priorities[indices] = np.abs(priorities) + self.epsilon
+
+class HumanDemonstrationBuffer:
+    """Buffer for storing human demonstrations"""
+    def __init__(self, buffer_size: int, observation_space: Dict, action_space: Any, device: str = "auto"):
+        self.buffer_size = buffer_size
+        self.observation_space = observation_space
+        self.action_space = action_space
+        self.device = th.device(device)
+        self.pos = 0
+        self.full = False
+        
+        # Initialize buffers for each observation component
+        self.observations = {
+            'depth_image': np.zeros((buffer_size, 1, observation_space['depth_image'].shape[1], 
+                                   observation_space['depth_image'].shape[2]), 
+                                   dtype=np.float32),
+            'position': np.zeros((buffer_size, 3), dtype=np.float32),
+            'goal': np.zeros((buffer_size, 3), dtype=np.float32),
+            'distance': np.zeros((buffer_size, 1), dtype=np.float32)
+        }
+        
+        self.actions = np.zeros((buffer_size, *action_space.shape), dtype=np.float32)
+        self.rewards = np.zeros((buffer_size,), dtype=np.float32)
+        self.dones = np.zeros((buffer_size,), dtype=np.float32)
+        
+    def add(self, obs: Dict[str, np.ndarray], action: np.ndarray, reward: float, 
+            done: bool) -> None:
+        # Copy observation components
+        for key in self.observations.keys():
+            self.observations[key][self.pos] = obs[key]
+        
+        self.actions[self.pos] = action
+        self.rewards[self.pos] = reward
+        self.dones[self.pos] = done
+        
+        self.pos += 1
+        if self.pos >= self.buffer_size:
+            self.full = True
+            self.pos = 0
+            
+    def sample(self, batch_size: int) -> ReplayBufferSamples:
+        upper_bound = self.buffer_size if self.full else self.pos
+        indices = np.random.randint(0, upper_bound, size=batch_size)
+        
+        observations = {
+            key: th.as_tensor(self.observations[key][indices]).to(self.device)
+            for key in self.observations.keys()
+        }
+        
+        return ReplayBufferSamples(
+            observations=observations,
+            actions=th.as_tensor(self.actions[indices]).to(self.device),
+            next_observations=observations,  # For demonstration data, we don't need next obs
+            rewards=th.as_tensor(self.rewards[indices]).to(self.device),
+            dones=th.as_tensor(self.dones[indices]).to(self.device)
+        )

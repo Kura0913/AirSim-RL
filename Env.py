@@ -7,8 +7,8 @@ import numpy as np
 import time
 
 class AirsimEnv(gym.Env):
-    def __init__(self, drone_name, config, camera_name = "camera", goal_name = "BP_Grid", start_point_name = "BP_StartPoint",
-                 distance_sensor_list = ["front", "left", "right", "lfront", "rfront", "lfbottom", "rfbottom", "rbbottom", "lbbottom", 'top']):
+    def __init__(self, drone_name, config:dict, camera_name = "camera", goal_name = "BP_Grid", start_point_name = "BP_StartPoint",
+                 distance_sensor_list = ["front", "left", "right", "back", "lfront", "rfront", "lfbottom", "rfbottom", "rbbottom", "lbbottom", 'top']):
         # config setting
         self.config = config
         # env variable
@@ -34,6 +34,7 @@ class AirsimEnv(gym.Env):
         self.observation_space = spaces.Dict({
             'depth_image': spaces.Box(low=0, high=255, shape=(1, self.target_resize[0], self.target_resize[1])),
             'position': spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+            'goal': spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
             'distance': spaces.Box(low=0, high=np.inf, shape=(1,))
         })
 
@@ -73,6 +74,9 @@ class AirsimEnv(gym.Env):
         
         return obs, reward, done, done, info
     
+    def _get_airsim_client(self):
+        return self.client
+    
     def _load_start_point(self):
         player_start_objects = self.client.simListSceneObjects(f'{self.start_point_name}[\w]*')
         for player_start_object in player_start_objects:
@@ -106,6 +110,7 @@ class AirsimEnv(gym.Env):
         return {
             'depth_image': depth_image_final,
             'position': position,
+            'goal': self.goal_position,
             'distance': np.array([distance])
         }
 
@@ -117,11 +122,15 @@ class AirsimEnv(gym.Env):
         distance = obs['distance'][0]
         if collision_info.has_collided: # collision happend or steps reach max_steps
             return True, False, False
-        if distance < 0.1: # reach destination
+        if distance < 0.3: # reach destination
+            print('finish mission')
             return True, True, False
         if self.steps >= self.config['max_steps']:
             return True, False, True
         return False, False, False # episode continue
-
+    
+    def get_last_executed_action(self):
+        return self.last_executed_action
+    
     def close(self):
         self.client.enableApiControl(False)

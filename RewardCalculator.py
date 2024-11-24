@@ -23,15 +23,6 @@ class DroneRewardCalculator:
         self.MARGIN_WEIGHT = 1.0
         self.ACTION_WEIGHT = 0.3
         self.STEP_WEIGHT = 0.2
-        
-        # Define adjacent sensor groups
-        self.adjacent_pairs = [
-            ('front', 'lfront'), ('front', 'rfront'),
-            ('left', 'lfront'), ('right', 'rfront'),
-            ('lfbottom', 'lfront'), ('rfbottom', 'rfront'),
-            ('lfbottom', 'left'), ('rfbottom', 'right'),
-            ('lbbottom', 'left'), ('rbbottom', 'right')
-        ]
     
     def _get_min_distance_sensor_value(self):
         distance_min_value = -1
@@ -117,31 +108,11 @@ class DroneRewardCalculator:
         
         action_magnitude = np.linalg.norm(action)
         
-        if safety_level > 0.8:  # very safe
-            if action_magnitude < self.LOW_VELOCITY:
-                return -3.0
-            elif action_magnitude > self.HIGH_VELOCITY:
-                return 5.0
-            return 2.0
-        
-        elif safety_level > 0.5:  # need attention
-            if action_magnitude < self.LOW_VELOCITY:
-                return -2.0
-            elif action_magnitude > self.HIGH_VELOCITY:
-                return 3.0
-            return 1.0
-        
-        elif safety_level > 0.2:  # dangerous
-            if action_magnitude > self.HIGH_VELOCITY:
-                return -3.0
-            elif action_magnitude < self.LOW_VELOCITY:
-                return 1.0
-            return 0.0
-        
-        else:  # very dangerous
-            if action_magnitude > self.LOW_VELOCITY:
-                return -5.0
-            return 0.0
+        if action_magnitude < self.LOW_VELOCITY:
+            return -2.0
+        elif action_magnitude > self.HIGH_VELOCITY:
+            return 3.0
+        return 1.0        
         
     def _calculate_step_reward(self, current_step: int, max_steps: int):
         """Calculate step efficiency reward"""
