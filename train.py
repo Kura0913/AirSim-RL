@@ -17,12 +17,29 @@ def train_ddpg(drone_name, config, folder_name):
         client=env._get_airsim_client(),
         drone_name="drone_1",
         sensor_list=env.distance_sensor_list,
-        safety_distance=2
+        safety_distance=2,
+        demos_dir=config['demo_file_path']
     )
     
-    # Collect demonstration data
-    if config['enable_human_intervention']:
-        collect_demonstrations(env, agent, controller, num_episodes=config['human_intervention_episode'])
+    # Setup demonstration handling
+    demo_file = f"demos_pretrain.pkl"
+    
+    if config['collect_new_demos']:
+        # Collect and save demonstrations
+        if config['enable_human_intervention']:
+            demos = controller.collect_demonstrations(
+                env, 
+                num_episodes=config['human_intervention_episode'],
+                max_steps=config['max_steps']
+            )
+            controller.save_demonstrations(demos, demo_file)
+    
+    # Load demonstrations into agent's buffer
+    demo_path = os.path.join(controller.demos_dir, demo_file)
+    if os.path.exists(demo_path):
+        controller.load_demonstrations_to_agent(agent, demo_file)
+    else:
+        print(f"No demonstration file found at {demo_path}")
 
     callback_class = HumanGuidedCallback(config, folder_name)
     agent.train(total_timesteps=config['episodes'] * config['max_steps'], callback=callback_class)

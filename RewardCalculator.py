@@ -200,17 +200,11 @@ class DroneRewardCalculator:
         r_t = (
             R_fly +
             margin_weight * R_margin +
-            action_weight * action_reward +
+            # action_weight * action_reward +
             # step_weight * step_reward +
             R_goal +
             R_collision
         )
-        # r_t = (
-        #     R_fly +
-        #     R_margin +
-        #     R_goal +
-        #     R_collision
-        # )
         # print(f"total_reward: {r_t}")
         return r_t
     

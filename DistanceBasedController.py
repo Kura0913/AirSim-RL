@@ -3,6 +3,8 @@ import numpy as np
 from typing import Dict, List, Tuple
 import airsim
 import Tools.AirsimTools as airsimtools
+import pickle
+import os
 
 MAX_DISTANCE = 10
 DISTANCE_RANGE = (0, 10)
@@ -10,7 +12,7 @@ MAPING_RANGE = (0, 1)
 
 class DistanceBasedController:
     def __init__(self, client: airsim.MultirotorClient, drone_name, sensor_list: List[str], 
-                 safety_distance: float = 1, goal_name = "BP_Grid"):
+                 safety_distance: float = 1, goal_name = "BP_Grid", demos_dir: str = "demonstrations"):
         """
         Initialize the distance-based controller
         
@@ -18,6 +20,8 @@ class DistanceBasedController:
             client: AirSim client instance
             sensor_list: List of distance sensor names
             safety_distance: Minimum safe distance from obstacles
+            goal_name: Name of the goal object
+            demos_dir: Directory to save/load demonstration data
         """
         self.client = client
         self.drone_name = drone_name
@@ -28,6 +32,10 @@ class DistanceBasedController:
         self.goal_distance_limit = 2
         self.goal_name = goal_name
         self.goal_position = np.array(self._load_goal_position(2))
+        
+        # Demonstration related attributes
+        self.demos_dir = demos_dir
+        os.makedirs(demos_dir, exist_ok=True)
         
         # Define drone limits (safety thresholds)
         self.drone_limits = {
@@ -163,3 +171,97 @@ class DistanceBasedController:
                     correct_velocity_factor = 0
             correct_velocity = [num * correct_velocity_factor for num in correct_velocity]
             return np.sum([velocity, correct_velocity], axis=0)
+        
+    def collect_demonstrations(self, env, num_episodes: int = 10, max_steps: int = 1000) -> List[Dict]:
+        """
+        Collect demonstration data using this controller
+        
+        Args:
+            env: Environment instance
+            num_episodes: Number of episodes to collect
+            max_steps: Maximum steps per episode
+            
+        Returns:
+            List of dictionaries containing demonstration data
+        """
+        demonstrations = []
+        
+        for episode in range(num_episodes):
+            obs, _ = env.reset()
+            done = False
+            episode_reward = 0
+            step = 0
+            
+            while not done and step < max_steps:
+                # Get action from controller
+                action = self.get_action(obs)
+                
+                # Execute action and get new state
+                next_obs, reward, done, _, info = env.step(action)
+                
+                # Store transition
+                demo = {
+                    'observation': obs,
+                    'action': action,
+                    'reward': reward,
+                    'next_observation': next_obs,
+                    'done': done
+                }
+                demonstrations.append(demo)
+                
+                obs = next_obs
+                episode_reward += reward
+                step += 1
+            
+            print(f"Demonstration Episode {episode + 1}: Reward = {episode_reward}")
+        
+        return demonstrations
+    
+    def save_demonstrations(self, demonstrations: List[Dict], filename: str):
+        """
+        Save demonstration data to file
+        
+        Args:
+            demonstrations: List of dictionaries containing demonstration data
+            filename: Name of the file to save
+        """
+        filepath = os.path.join(self.demos_dir, filename)
+        with open(filepath, 'wb') as f:
+            pickle.dump(demonstrations, f)
+        print(f"Saved {len(demonstrations)} demonstrations to {filepath}")
+    
+    def load_demonstrations(self, filename: str) -> List[Dict]:
+        """
+        Load demonstration data from file
+        
+        Args:
+            filename: Name of the file to load
+            
+        Returns:
+            List of dictionaries containing demonstration data
+        """
+        filepath = os.path.join(self.demos_dir, filename)
+        with open(filepath, 'rb') as f:
+            demonstrations = pickle.load(f)
+        print(f"Loaded {len(demonstrations)} demonstrations from {filepath}")
+        return demonstrations
+
+    def load_demonstrations_to_agent(self, agent, filename: str):
+        """
+        Load demonstrations from file and add them to agent's demo buffer
+        
+        Args:
+            agent: HumanGuidedDDPGAgent instance
+            filename: Name of the file to load
+        """
+        demonstrations = self.load_demonstrations(filename)
+        
+        for demo in demonstrations:
+            agent.add_demonstration(
+                demo['observation'],
+                demo['action'],
+                demo['reward'],
+                demo['done']
+            )
+        
+        print(f"Added {len(demonstrations)} demonstrations to agent's demo buffer")
