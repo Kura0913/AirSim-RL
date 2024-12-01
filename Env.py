@@ -16,7 +16,8 @@ class AirsimEnv(gym.Env):
         self.camera_name = camera_name
         self.goal_name = goal_name
         self.start_point_name = start_point_name
-        self.distance_sensor_list = distance_sensor_list
+        # self.distance_sensor_list = distance_sensor_list
+        self.distance_sensor_list = ["front", "left", "right", "back"]
         self.target_resize = config['resize']
         # set airsim api client
         self.client = airsim.MultirotorClient()
@@ -30,11 +31,12 @@ class AirsimEnv(gym.Env):
         self.episode_rewards = []
         self.end_eposide = False
         # define action sapce, observation space
-        self.action_space = spaces.Box(low=-1, high=1, shape=(3,))
+        # self.action_space = spaces.Box(low=-1, high=1, shape=(3,))
+        self.action_space = spaces.Box(low=-1, high=1, shape=(2,))
         self.observation_space = spaces.Dict({
             'depth_image': spaces.Box(low=0, high=255, shape=(1, self.target_resize[0], self.target_resize[1])),
             'position': spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
-            'goal': spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+            # 'goal': spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
             'distance': spaces.Box(low=0, high=np.inf, shape=(1,))
         })
 
@@ -45,13 +47,19 @@ class AirsimEnv(gym.Env):
         self.reward_calculator = DroneRewardCalculator(self.client, self.distance_sensor_list, self.drone_name, self.start_position, self.goal_position, self.config['max_steps'])
 
     def reset(self, seed=None):
+        reset_flag = True
         if seed is not None:
             np.random.seed(seed)
-        airsimtools.reset_drone(self.client, self.drone_name)
-        self.client.simSetVehiclePose(self.start_pose, True, vehicle_name=self.drone_name)
-        self.end_eposide = False
-        self.total_reward = 0
-        self.steps = 0
+        while reset_flag:
+            airsimtools.reset_drone(self.client, self.drone_name)
+            self.client.simSetVehiclePose(self.start_pose, True, vehicle_name=self.drone_name)
+            self.end_eposide = False
+            self.total_reward = 0
+            self.steps = 0
+            time.sleep(0.5)
+            position = self.client.getMultirotorState(self.drone_name).kinematics_estimated.position.to_numpy_array()
+            if np.linalg.norm(position - self.start_position) < 5 and  not self.client.simGetCollisionInfo(self.drone_name).has_collided:
+                reset_flag = False
         self.episode += 1
 
         return self._get_obs(), dict()
@@ -59,8 +67,13 @@ class AirsimEnv(gym.Env):
     def step(self, action):
         self.steps += 1
         # execute action
-        n, e, d = action
-        self.client.moveByVelocityAsync(float(n), float(e), float(d), 1, vehicle_name=self.drone_name).join()
+        if len(action) == 3:
+            n, e, d = action
+        else:
+            n, e = action
+        # n, e, d = action
+        self.client.moveByVelocityZAsync(float(n), float(e), 0, 1, vehicle_name=self.drone_name).join()
+        # self.client.moveByVelocityAsync(float(n), float(e), float(d), 1, vehicle_name=self.drone_name).join()
         self.client.moveByVelocityAsync(0.0, 0.0, 0.0, 0.2, vehicle_name=self.drone_name).join()
         
         obs = self._get_obs()
@@ -102,7 +115,7 @@ class AirsimEnv(gym.Env):
         depth_image_resized = np.resize(depth_image, self.target_resize)
         depth_image_final = np.expand_dims(depth_image_resized, axis=0)
         # get drone position
-        position = self.client.getMultirotorState().kinematics_estimated.position.to_numpy_array()
+        position = self.client.getMultirotorState(self.drone_name).kinematics_estimated.position.to_numpy_array()
 
         # calculate distance to goal position
         distance = np.linalg.norm(position - self.goal_position)
@@ -120,13 +133,14 @@ class AirsimEnv(gym.Env):
         '''
         collision_info = self.client.simGetCollisionInfo()
         distance = obs['distance'][0]
-        if collision_info.has_collided: # collision happend or steps reach max_steps
-            return True, False, False
-        if distance < 0.3: # reach destination
+        if collision_info.has_collided and self.goal_name in collision_info.object_name: # reach destination
             print('finish mission')
             return True, True, False
-        if self.steps >= self.config['max_steps']:
-            return True, False, True
+        if collision_info.has_collided: # collision happend or steps reach max_steps
+            print(f"collision object:{collision_info.object_name}")
+            return True, False, False
+        # if self.steps >= self.config['max_steps']:
+        #     return True, False, True
         return False, False, False # episode continue
     
     def get_last_executed_action(self):

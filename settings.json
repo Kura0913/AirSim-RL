@@ -38,17 +38,18 @@
       "Sensors":{
         "lidar": {
           "SensorType": 6,
-          "Enabled" : true,
+          "Enabled": true,
+          "Range": 50,
           "NumberOfChannels": 64,
-          "RotationsPerSecond": 10,
+          "RotationsPerSecond": 15,
           "PointsPerSecond": 1500000,
-          "X": 0.5, "Y": 0, "Z": -1,
-          "Roll": 0, "Pitch": -30, "Yaw" : 0,
-          "VerticalFOVUpper": 45,
-          "VerticalFOVLower": -45,
-          "HorizontalFOVStart": -45,
-          "HorizontalFOVEnd": 45,
-          "DrawDebugPoints": false,
+          "X": 0.5, "Y": 0, "Z": 0,
+          "Roll": 0, "Pitch": 0, "Yaw" : 0,
+          "VerticalFOVUpper": 0,
+          "VerticalFOVLower": 0,
+          "HorizontalFOVStart": -75,
+          "HorizontalFOVEnd": 75,
+          "DrawDebugPoints": true,
           "DataFrame": "SensorLocalFrame"
         },
         "front": {
@@ -58,7 +59,7 @@
         "Yaw": 0, "Pitch": 0, "Roll": 0,
         "MaxDistance":10,
         "MinDistance": 0,
-        "DrawDebugPoints": true
+        "DrawDebugPoints": false
         },
         "front1": {
         "SensorType": 5,
@@ -67,7 +68,7 @@
         "Yaw": 0, "Pitch": 0, "Roll": 0,
         "MaxDistance":10,
         "MinDistance": 0,
-        "DrawDebugPoints": true
+        "DrawDebugPoints": false
         },
         "front2": {
         "SensorType": 5,
@@ -76,7 +77,7 @@
         "Yaw": 0, "Pitch": 0, "Roll": 0,
         "MaxDistance":10,
         "MinDistance": 0,
-        "DrawDebugPoints": true
+        "DrawDebugPoints": false
         },
         "rfront": {
           "SensorType": 5,
@@ -85,7 +86,7 @@
           "Yaw": 45, "Pitch": 0, "Roll": 0,
           "MaxDistance":10,
           "MinDistance": 0,
-          "DrawDebugPoints": true
+          "DrawDebugPoints": false
         },
         "lfront": {
           "SensorType": 5,
@@ -94,7 +95,7 @@
           "Yaw": -45, "Pitch": 0, "Roll": 0,
           "MaxDistance":10,
           "MinDistance": 0,
-          "DrawDebugPoints": true
+          "DrawDebugPoints": false
         },
         "left": {
           "SensorType": 5,
@@ -103,7 +104,7 @@
           "Yaw": -90, "Pitch": 0, "Roll": 0,
           "MaxDistance":10,
           "MinDistance": 0,
-          "DrawDebugPoints": true
+          "DrawDebugPoints": false
         },
         "right": {
           "SensorType": 5,
@@ -112,7 +113,7 @@
           "Yaw": 90, "Pitch": 0, "Roll": 0,
           "MaxDistance":10,
           "MinDistance": 0,
-          "DrawDebugPoints": true
+          "DrawDebugPoints": false
         },
         "back": {
         "SensorType": 5,
@@ -129,7 +130,7 @@
           "Yaw": 0, "Pitch": 90, "Roll": 0,
           "MaxDistance":10,
           "MinDistance": 0,
-          "DrawDebugPoints": true
+          "DrawDebugPoints": false
         },
         "rfbottom": {
           "SensorType": 5,
@@ -138,7 +139,7 @@
           "Yaw": 0, "Pitch": -90, "Roll": 0,
           "MaxDistance":10,
           "MinDistance": 0,
-          "DrawDebugPoints": true
+          "DrawDebugPoints": false
         },
         "lfbottom": {
           "SensorType": 5,
@@ -147,7 +148,7 @@
           "Yaw": 0, "Pitch": -90, "Roll": 0,
           "MaxDistance":10,
           "MinDistance": 0,
-          "DrawDebugPoints": true
+          "DrawDebugPoints": false
         },
         "rbbottom": {
           "SensorType": 5,
@@ -156,7 +157,7 @@
           "Yaw": 0, "Pitch": -90, "Roll": 0,
           "MaxDistance":10,
           "MinDistance": 0,
-          "DrawDebugPoints": true
+          "DrawDebugPoints": false
         },
         "lbbottom": {
           "SensorType": 5,
@@ -165,7 +166,7 @@
           "Yaw": 0, "Pitch": -90, "Roll": 0,
           "MaxDistance":10,
           "MinDistance": 0,
-          "DrawDebugPoints": true
+          "DrawDebugPoints": false
         }
       }
     }

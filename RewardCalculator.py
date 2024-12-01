@@ -39,6 +39,31 @@ class DroneRewardCalculator:
             value = self.client.getDistanceSensorData(sensor, self.drone_name).distance
             distances[sensor] = value
         return distances
+    
+    def _calculate_margin_reward_lidar(self):
+        # get point cloud data
+        point_cloud = self.client.getLidarData("lidar", self.drone_name).point_cloud
+        points = np.array(point_cloud, dtype=np.float32).reshape(-1, 3)
+
+        # calculate distance for each point
+        if points is None or len(points) == 0:
+            return 5
+        
+        distances = np.linalg.norm(points, axis=1)
+
+        d_obstacle = min(distances)
+
+        if d_obstacle < self.d_hard:
+            R_margin = -self.C2 / d_obstacle
+        elif d_obstacle < self.d_soft:
+            R_margin = -self.C1 * (1 - d_obstacle / self.d_soft)
+        else:
+            R_margin = 5
+
+        return R_margin
+
+        
+    
     def _calculate_margin_reward_v1(self):
         # R_margin: penalty for getting too close to obstacles        
         d_obstacle = self._get_min_distance_sensor_value()
@@ -100,32 +125,6 @@ class DroneRewardCalculator:
         
         return max(-100.0, min(5.0, final_penalty))
     
-    def _calculate_action_reward(self, action, margin_reward):
-        """Calculate action efficiency reward"""
-        # Convert margin_reward to safety_level [0, 1]
-        safety_level = (margin_reward + 100) / 105.0
-        safety_level = max(0.0, min(1.0, safety_level))
-        
-        action_magnitude = np.linalg.norm(action)
-        
-        if action_magnitude < self.LOW_VELOCITY:
-            return -2.0
-        elif action_magnitude > self.HIGH_VELOCITY:
-            return 3.0
-        return 1.0        
-        
-    def _calculate_step_reward(self, current_step: int, max_steps: int):
-        """Calculate step efficiency reward"""
-        progress_ratio = current_step / max_steps
-        
-        if progress_ratio < 0.5:
-            return 0.0
-        elif progress_ratio < 0.8:
-            step_penalty_factor = (progress_ratio - 0.5) / 0.3
-            return -3.0 * step_penalty_factor
-        else:
-            return -5.0
-    
     def _calculate_fly_reward(self, obs):
         # R_fly: reward for flying towards destination and following predefined route
         distance_to_destination = np.linalg.norm(obs['position'] - self.goal_position)
@@ -139,27 +138,7 @@ class DroneRewardCalculator:
         R_fly = 10.0 * (0.7 * progress + 0.3 * route_adherence)
 
         return R_fly
-
-    def _calculate_velocity_reward(self, action):
-        # R_movement: reward/penalty for movement vector characteristics
-        LOW_HORIZONTAL = 0.5
-        HIGH_VERTICAL = 0.5
-
-        
-        horizontal_movement = np.sqrt(action[0]**2 + action[1]**2)
-        vertical_movement = abs(action[2])
-
-        if horizontal_movement > LOW_HORIZONTAL:
-            if vertical_movement > HIGH_VERTICAL:
-                vertical_penalty = -5.0 * (vertical_movement - HIGH_VERTICAL)
-            else:
-                vertical_penalty = 5.0 * (1.0 - vertical_movement/HIGH_VERTICAL)
-            R_movement = vertical_penalty * (horizontal_movement / 1.0)
-        else:
-            R_movement = 0.0
-
-            return R_movement
-        
+    
     def _adjust_weights(self, margin_reward):
         """Dynamically adjust weights based on safety level"""
         safety_level = (margin_reward + 100) / 105.0
@@ -186,20 +165,17 @@ class DroneRewardCalculator:
         R_goal = 100 if done and completed else 0
         
         # R_margin: margin reward
+        R_margin = self._calculate_margin_reward_lidar()
         # R_margin = self._calculate_margin_reward_v1() # margin rewardV1
-        R_margin = self._calculate_margin_reward_v2(sensor_distances)  # V2
+        # R_margin = self._calculate_margin_reward_v2(sensor_distances)  # V2
         # R_margin = self._calculate_margin_reward_v3(sensor_distances)  # V3
 
         margin_weight, action_weight, step_weight = self._adjust_weights(R_margin)
-
-        # Calculate individual rewards
-        action_reward = self._calculate_action_reward(action, R_margin)
-        # step_reward = self._calculate_step_reward(curr_step, self.max_steps)
         
         # calculate total reward
         r_t = (
             R_fly +
-            margin_weight * R_margin +
+            R_margin +
             # action_weight * action_reward +
             # step_weight * step_reward +
             R_goal +

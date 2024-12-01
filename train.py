@@ -35,11 +35,12 @@ def train_ddpg(drone_name, config, folder_name):
             controller.save_demonstrations(demos, demo_file)
     
     # Load demonstrations into agent's buffer
-    demo_path = os.path.join(controller.demos_dir, demo_file)
-    if os.path.exists(demo_path):
-        controller.load_demonstrations_to_agent(agent, demo_file)
-    else:
-        print(f"No demonstration file found at {demo_path}")
+    if config['load_demo']:
+        demo_path = os.path.join(controller.demos_dir, demo_file)
+        if os.path.exists(demo_path):
+            controller.load_demonstrations_to_agent(agent, demo_file)
+        else:
+            print(f"No demonstration file found at {demo_path}")
 
     callback_class = HumanGuidedCallback(config, folder_name)
     agent.train(total_timesteps=config['episodes'] * config['max_steps'], callback=callback_class)

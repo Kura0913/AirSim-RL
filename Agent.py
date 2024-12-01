@@ -13,7 +13,7 @@ class DDPGAgent:
         self.config = config
         policy_kwargs = dict(
             features_extractor_class=CustomFeaturesExtractor,
-            features_extractor_kwargs=dict(features_dim=512+32+32+32),
+            features_extractor_kwargs=dict(features_dim=512+32+32),
             net_arch=dict(pi=[256, 256, 256], qf=[256, 256]),
             config=config,
             optimizer_class=th.optim.Adam,
@@ -28,7 +28,6 @@ class DDPGAgent:
             env,
             policy_kwargs=policy_kwargs,
             verbose=1,
-            learning_starts=10000,
             gamma=0.9999,
             buffer_size=500000,
             learning_rate=self.config["learning_rate"],
