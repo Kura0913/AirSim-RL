@@ -42,20 +42,15 @@ class DroneRewardCalculator:
         R_margin = self._calculate_margin_reward_lidar()
         # R_margin = self._calculate_margin_reward_v1() # margin rewardV1
         # R_margin = self._calculate_margin_reward_v2(sensor_distances)  # V2
-        # R_margin = self._calculate_margin_reward_v3(sensor_distances)  # V3
-
-        margin_weight, action_weight, step_weight = self._adjust_weights(R_margin)
         
         # calculate total reward
         r_t = (
             R_fly +
             R_margin +
-            # action_weight * action_reward +
-            # step_weight * step_reward +
             R_goal +
             R_collision
         )
-        # print(f"total_reward: {r_t}")
+
         return r_t
 
     def _get_min_distance_sensor_value(self):
@@ -164,26 +159,11 @@ class DroneRewardCalculator:
         distance_to_destination = np.linalg.norm(obs['position'] - self.goal_position)
         distance_to_route = self._calculate_distance_to_route(obs['position'], self.start_positon, self.goal_position)
 
-        progess = self.max_possible_distance - distance_to_destination
-        route_adherence = self.max_route_adherence - distance_to_route
-        # progress = 1.0 - (distance_to_destination / max_possible_distance)
-        # route_adherence = 1.0 - min(1.0, distance_to_route / self.d_soft)
-        
-        # R_fly = 10.0 * (0.7 * progress + 0.3 * route_adherence)
+        progess =  -distance_to_destination
+        route_adherence = -distance_to_route
+
         R_fly = progess + route_adherence
         return R_fly
-    
-    def _adjust_weights(self, margin_reward):
-        """Dynamically adjust weights based on safety level"""
-        safety_level = (margin_reward + 100) / 105.0
-        safety_level = max(0.0, min(1.0, safety_level))
-        
-        if safety_level > 0.8:
-            return 1.0, 0.7, 0.3  # margin, action, step
-        elif safety_level > 0.5:
-            return 1.0, 0.3, 0.2
-        else:
-            return 1.0, 0.0, 0.1
     
     def _calculate_distance_to_route(self, current_pos, start_pos, goal_pos):
         # convet variable to numpy array

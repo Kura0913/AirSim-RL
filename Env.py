@@ -108,7 +108,7 @@ class AirsimEnv(gym.Env):
 
     def _get_obs(self):
         # get depth image
-        responses = self.client.simGetImages([airsim.ImageRequest("0", airsim.ImageType.DepthVis, True, False)])
+        responses = self.client.simGetImages([airsim.ImageRequest("0", airsim.ImageType.DepthPerspective, True, False)])
         depth_image = np.array(responses[0].image_data_float, dtype=np.float32)
         depth_image = np.reshape(depth_image, (responses[0].height, responses[0].width))
         depth_image = np.array(depth_image * 255, dtype=np.uint8)

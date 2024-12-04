@@ -29,7 +29,8 @@ class DDPGAgent:
             policy_kwargs=policy_kwargs,
             verbose=1,
             gamma=0.9999,
-            buffer_size=500000,
+            learning_starts=3000,
+            buffer_size=200000,
             learning_rate=self.config["learning_rate"],
             batch_size=256,
             device=th.device(self.config['device'])
