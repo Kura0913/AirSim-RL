@@ -13,7 +13,7 @@ class DDPGAgent:
         self.config = config
         policy_kwargs = dict(
             features_extractor_class=CustomFeaturesExtractor,
-            features_extractor_kwargs=dict(features_dim=512+32+32),
+            features_extractor_kwargs=dict(features_dim=32),
             net_arch=dict(pi=[256, 256, 256], qf=[256, 256]),
             config=config,
             optimizer_class=th.optim.Adam,
@@ -29,7 +29,7 @@ class DDPGAgent:
             policy_kwargs=policy_kwargs,
             verbose=1,
             gamma=0.9999,
-            learning_starts=3000,
+            learning_starts=1000,
             buffer_size=200000,
             learning_rate=self.config["learning_rate"],
             batch_size=256,
@@ -38,7 +38,7 @@ class DDPGAgent:
         )
 
         self.model.replay_buffer = PrioritizedReplayBuffer(
-            buffer_size=500000,
+            buffer_size=50000,
             observation_space=env.observation_space,
             action_space=env.action_space,
             device=th.device(self.config['device']),

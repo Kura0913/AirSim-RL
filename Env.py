@@ -8,7 +8,7 @@ import time
 
 class AirsimEnv(gym.Env):
     def __init__(self, drone_name, config:dict, camera_name = "camera", goal_name = "BP_Grid", start_point_name = "BP_StartPoint",
-                 distance_sensor_list = ["front", "left", "right", "back", "lfront", "rfront", "lfbottom", "rfbottom", "rbbottom", "lbbottom", 'top']):
+                 distance_sensor_list = ["front", "left", "right", "back", "lfront", "rfront", "lfbottom", "rfbottom", "rbbottom", "lbbottom", 'top'], lidar_list = ['lidar1', 'lidar2']):
         # config setting
         self.config = config
         # env variable
@@ -18,6 +18,7 @@ class AirsimEnv(gym.Env):
         self.start_point_name = start_point_name
         # self.distance_sensor_list = distance_sensor_list
         self.distance_sensor_list = ["front", "left", "right", "back"]
+        self.lidar_list = lidar_list
         self.target_resize = config['resize']
         # set airsim api client
         self.client = airsim.MultirotorClient()
@@ -44,7 +45,7 @@ class AirsimEnv(gym.Env):
         self.start_position = [self.start_pose.position.x_val, self.start_pose.position.y_val, self.start_pose.position.z_val]
         self.goal_position = np.array(self._load_goal_position(2))
         # reward calculator
-        self.reward_calculator = DroneRewardCalculator(self.client, self.distance_sensor_list, self.drone_name, self.start_position, self.goal_position, self.config['max_steps'])
+        self.reward_calculator = DroneRewardCalculator(self.client, self.lidar_list, self.drone_name, self.start_position, self.goal_position)
 
     def reset(self, seed=None):
         reset_flag = True
@@ -70,10 +71,9 @@ class AirsimEnv(gym.Env):
         if len(action) == 3:
             n, e, d = action
         else:
-            n, e = action
-        # n, e, d = action
-        self.client.moveByVelocityZAsync(float(n), float(e), 0, 1, vehicle_name=self.drone_name).join()
-        # self.client.moveByVelocityAsync(float(n), float(e), float(d), 1, vehicle_name=self.drone_name).join()
+            e, d = action
+
+        self.client.moveByVelocityAsync(1, float(e), float(d), 1, vehicle_name=self.drone_name).join()
         self.client.moveByVelocityAsync(0.0, 0.0, 0.0, 0.2, vehicle_name=self.drone_name).join()
         
         obs = self._get_obs()
@@ -139,9 +139,6 @@ class AirsimEnv(gym.Env):
             print(f"collision object:{collision_info.object_name}")
             return True, False
         return False, False # episode continue
-    
-    def get_last_executed_action(self):
-        return self.last_executed_action
     
     def close(self):
         self.client.enableApiControl(False)

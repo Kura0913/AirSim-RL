@@ -2,81 +2,78 @@ import numpy as np
 import airsim
 
 class DroneRewardCalculator:
-    def __init__(self, client: airsim.MultirotorClient, distance_sensor_list, drone_name, start_position, goal_position, max_steps):
-        self.distance_sensor_list = distance_sensor_list
+    def __init__(self, client: airsim.MultirotorClient, lidar_list, drone_name, start_position, goal_position, center_pixels=(16, 16)):
+        self.lidar_list = lidar_list
         self.client = client
         self.drone_name = drone_name
         self.start_positon = start_position
         self.goal_position = goal_position
-        self.max_steps = max_steps
         # Margin boundaries and constants
         self.d_soft = 2.0
         self.d_hard = 0.5
-        self.C1 = 10.0
-        self.C2 = 20.0
-        self.max_possible_distance = np.linalg.norm(self.goal_position - self.start_positon)
-        self.max_route_adherence = 7.0
-        # Action reward constants
-        self.LOW_VELOCITY = 0.2
-        self.HIGH_VELOCITY = 0.8
-        
-        # Reward weights
-        self.MARGIN_WEIGHT = 1.0
-        self.ACTION_WEIGHT = 0.3
-        self.STEP_WEIGHT = 0.2
+        self.C1 = 2.0
+        self.C2 = 4.0
+        self.collision_penalty = -2.0
+        self.reach_destination_reward = 2.0
+        self.obstacle_avoidance_reward = 0.5
+        self.center_height, self.center_width = center_pixels
     
     def compute_reward(self, action, obs, curr_step, done:bool, completed:bool):
+        r_t = 0
+
         # R_collision: penalty for collision
-        R_collision = -100 if done and not completed else 0
-        
-        # Get the distance values ​​of all sensors
-        sensor_distances = self._get_all_sensor_distances()        
-        
-        # Get fly reward
-        R_fly = self._calculate_fly_reward(obs)
+        R_collision = -2 if done and not completed else 0
         
         # R_goal: reward for reaching the destination
-        R_goal = 100 if done and completed else 0
+        R_goal = 2 if done and completed else 0
         
-        # R_margin: margin reward
-        R_margin = self._calculate_margin_reward_lidar()
-        # R_margin = self._calculate_margin_reward_v1() # margin rewardV1
-        # R_margin = self._calculate_margin_reward_v2(sensor_distances)  # V2
-        
-        # calculate total reward
-        r_t = (
-            R_fly +
-            R_margin +
-            R_goal +
-            R_collision
-        )
+        r_t += self._get_action_reward(obs)
+        # r_t += self._calculate_margin_reward_lidar()
 
+        if done and not completed:
+            return R_collision
+        
+        if done and completed:
+            return R_goal
+        
         return r_t
+    
+    def _get_action_reward(self, obs):
+        depth_map = obs['depth_image']
+        _, h, w = depth_map.shape
+        if h < self.center_height or w < self.center_width:
+            raise ValueError(
+                f"Depth map size ({h}x{w}) is smaller than center region "
+                f"size ({self.center_height}x{self.center_width})"
+            )
+        # Get the center area of ​​the depth map
+        center_region = self._get_center_region(depth_map, h, w)
 
-    def _get_min_distance_sensor_value(self):
-        distance_min_value = -1
-        for distance_sensor in self.distance_sensor_list:
-            value = self.client.getDistanceSensorData(distance_sensor, self.drone_name).distance
-            if value < distance_min_value or distance_min_value < 0:
-                distance_min_value = value
-        
-        return distance_min_value
-    
-    def _get_all_sensor_distances(self):
-        distances = {}
-        for sensor in self.distance_sensor_list:
-            value = self.client.getDistanceSensorData(sensor, self.drone_name).distance
-            distances[sensor] = value
-        return distances
-    
+        # Calculate the average depth of the central area and overall
+        center_depth = np.mean(center_region)
+        overall_depth = np.mean(depth_map)
+
+        depth_max = np.max(depth_map)
+        if depth_max > 0:
+            normalized_center = center_depth / depth_max
+            normalized_overall = overall_depth / depth_max
+
+            # calculate action reward
+            if normalized_center > normalized_overall:
+                return 0.2  # stay away from obstacles
+            else:
+                return -0.2  # approaching obstacles
+
     def _calculate_margin_reward_lidar(self):
         # get point cloud data
-        point_cloud = self.client.getLidarData("lidar", self.drone_name).point_cloud
+        point_cloud = []
+        for lidar_name in self.lidar_list:
+            point_cloud += self.client.getLidarData(lidar_name, self.drone_name).point_cloud
         points = np.array(point_cloud, dtype=np.float32).reshape(-1, 3)
 
         # calculate distance for each point
         if points is None or len(points) == 0:
-            return 5
+            return 0
         
         distances = np.linalg.norm(points, axis=1)
 
@@ -90,102 +87,16 @@ class DroneRewardCalculator:
             R_margin = 0
 
         return R_margin
+        
+    def _get_center_region(self, depth_map, h, w):        
+        # Make sure the center area is no larger than the original image
+        center_h = min(self.center_height, h)
+        center_w = min(self.center_width, w)
+        
+        # Calculate the start and end positions of the center area
+        h_start = (h - center_h) // 2
+        h_end = h_start + center_h
+        w_start = (w - center_w) // 2
+        w_end = w_start + center_w
 
-        
-    
-    def _calculate_margin_reward_v1(self):
-        # R_margin: penalty for getting too close to obstacles        
-        d_obstacle = self._get_min_distance_sensor_value()
-        if d_obstacle < self.d_hard:
-            R_margin = -self.C2 / d_obstacle
-        elif d_obstacle < self.d_soft:
-            R_margin = -self.C1 * (1 - d_obstacle / self.d_soft)
-        else:
-            R_margin = 5
-
-        return R_margin
-    
-    def _calculate_margin_reward_v2(self, sensor_distances: dict):
-        """
-        Optimized V2 version of margin reward calculation
-        - More linear scaling
-        - Clear reward of 5.0 for safe conditions
-        - Bounded minimum reward at -100
-        """
-        num_sensors = len(sensor_distances)
-        
-        # Check if all sensors are in safe zone
-        if all(distance >= self.d_soft for distance in sensor_distances.values()):
-            return 5.0
-        
-        violations = []
-        for sensor, distance in sensor_distances.items():
-            if distance < self.d_hard:
-                # Linear scaling for hard boundary violations
-                severity = max(0.1, distance) / self.d_hard
-                violations.append(('hard', severity))
-            elif distance < self.d_soft:
-                # Linear scaling for soft boundary violations
-                severity = (distance - self.d_hard) / (self.d_soft - self.d_hard)
-                violations.append(('soft', severity))
-        
-        if not violations:
-            return 5.0
-        
-        # Calculate penalty based on violation type and severity
-        total_penalty = 0
-        num_violations = len(violations)
-        
-        for violation_type, severity in violations:
-            if violation_type == 'hard':
-                # Hard violations scale from -100 to -50
-                penalty = -100 + (50 * severity)
-            else:
-                # Soft violations scale from -50 to 0
-                penalty = -50 + (50 * severity)
-            total_penalty += penalty
-        
-        # Average the penalties and apply violation density scaling
-        avg_penalty = total_penalty / num_violations
-        violation_ratio = num_violations / num_sensors
-        
-        # Linear combination of average penalty and violation density
-        final_penalty = avg_penalty * (0.7 + 0.3 * violation_ratio)
-        
-        return max(-100.0, min(5.0, final_penalty))
-    
-    def _calculate_fly_reward(self, obs):
-        # R_fly: reward for flying towards destination and following predefined route
-        distance_to_destination = np.linalg.norm(obs['position'] - self.goal_position)
-        distance_to_route = self._calculate_distance_to_route(obs['position'], self.start_positon, self.goal_position)
-
-        progess =  -distance_to_destination
-        route_adherence = -distance_to_route
-
-        R_fly = progess + route_adherence
-        return R_fly
-    
-    def _calculate_distance_to_route(self, current_pos, start_pos, goal_pos):
-        # convet variable to numpy array
-        current_pos = np.array(current_pos)
-        start_pos = np.array(start_pos)
-        goal_pos = np.array(goal_pos)
-        # Vector calculation
-        line_vec = goal_pos - start_pos
-        point_vec = current_pos - start_pos
-        line_len = np.linalg.norm(line_vec)
-        line_unitvec = line_vec / line_len
-        
-        # Calculate projection
-        point_proj_len = np.dot(point_vec, line_unitvec)
-        
-        if point_proj_len < 0:
-            # Click in front of the starting point
-            return np.linalg.norm(current_pos - start_pos)
-        elif point_proj_len > line_len:
-            # Click behind the end point
-            return np.linalg.norm(current_pos - goal_pos)
-        else:
-            # Point in the middle of the line segment and calculate the vertical distance
-            point_proj = start_pos + line_unitvec * point_proj_len
-            return np.linalg.norm(current_pos - point_proj)
+        return depth_map[0, h_start:h_end, w_start:w_end]

@@ -8,8 +8,6 @@ import os
 
 def train_ddpg(drone_name, config, folder_name):
     env = AirsimEnv(drone_name, config)
-    # agent = DDPGAgent(env, config)
-    # callback_class = CustomCallback(config, folder_name)
     agent = HumanGuidedDDPGAgent(env, config)
 
     # initialize controller

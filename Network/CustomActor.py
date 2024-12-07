@@ -1,10 +1,46 @@
-import torch
 import torch.nn as nn
+import torch as th
 from stable_baselines3.td3.policies import Actor
 from stable_baselines3.common.preprocessing import get_action_dim
 from typing import List, Type
 import gymnasium.spaces as spaces
 
+class CustomActorNetwork(nn.Module):
+    def __init__(
+        self,
+        features_dim: int,
+        action_dim: int = 2
+    ):
+        super(CustomActorNetwork, self).__init__()
+        self.features_dim = features_dim
+        self.action_dim = action_dim
+
+         # Layer definitions
+        self.fc1 = nn.Linear(self.features_dim, 256)
+        self.fc2 = nn.Linear(256, 256)
+        self.fc3 = nn.Linear(256, 256)
+        self.fc4 = nn.Linear(256, action_dim)
+         
+         # Activation functions
+        self.relu = nn.ReLU()
+        self.hard_swish = nn.Hardswish()
+        self.hard_tanh = nn.Tanh()
+    
+    def forward(self, features: th.Tensor) -> th.Tensor:        
+        # Layer 1: FC + ReLU
+        x = self.relu(self.fc1(features))
+        
+        # Layer 2: FC + Hard Swish
+        x = self.hard_swish(self.fc2(x))
+        
+        # Layer 3: FC + Hard Swish
+        x = self.hard_swish(self.fc3(x))
+        
+        # Layer 4: FC + Hard Tanh
+        x = self.hard_tanh(self.fc4(x))
+
+        return x
+    
 class CustomActor(Actor):
     def __init__(
         self,
@@ -26,46 +62,7 @@ class CustomActor(Actor):
         )
 
         self.features_dim = features_dim
-        action_dim = get_action_dim(self.action_space)
-        
-        self.fc1 = nn.Linear(features_dim, 32)  # First FC layer
-        self.fc2 = nn.Linear(32, 32)            # Second FC layer
-        self.fc3 = nn.Linear(32, action_dim)    # Output layer (3 dimensions for your case)
-        
-        # Use Softmax as the activation function of the middle layer
-        self.softmax = nn.Softmax(dim=-1)
-        
-        # Initialize weights
-        self._init_weights()
-    
-    def _init_weights(self):
-        """Initialize the weights using He initialization"""
-        nn.init.kaiming_uniform_(self.fc1.weight, nonlinearity='linear')
-        nn.init.kaiming_uniform_(self.fc2.weight, nonlinearity='linear')
-        nn.init.kaiming_uniform_(self.fc3.weight, nonlinearity='linear')
-        
-        # Initialize biases to zero
-        nn.init.zeros_(self.fc1.bias)
-        nn.init.zeros_(self.fc2.bias)
-        nn.init.zeros_(self.fc3.bias)
-    
-    def forward(self, obs: torch.Tensor) -> torch.Tensor:
-        # Extract features from the observation
-        features = self.extract_features(obs, self.features_extractor)
-        
-        # Apply network layers with activations exactly as in the paper
-        x = self.softmax(self.fc1(features))
-        x = self.softmax(self.fc2(x))
-        # Final layer uses linear activation (no activation function)
-        actions = self.fc3(x)
-        
-        # Bound the actions to [-1, 1] using tanh
-        # This is a common practice in continuous action spaces
-        return torch.tanh(actions)
-    
-    def scale_action(self, action: torch.Tensor) -> torch.Tensor:
-        """Scale the actions to the correct range if needed"""
-        action_space_low = torch.tensor(self.action_space.low, device=action.device)
-        action_space_high = torch.tensor(self.action_space.high, device=action.device)
-        
-        return 0.5 * (action_space_high - action_space_low) * action + 0.5 * (action_space_high + action_space_low)
+        self.action_dim = get_action_dim(self.action_space)
+
+        actor_net = CustomActorNetwork(self.features_dim, self.action_dim)
+        self.mu = actor_net
