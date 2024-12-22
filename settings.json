@@ -17,15 +17,15 @@
           "CaptureSettings": [
             {
               "ImageType": 0,
-              "Width": 480,
-              "Height": 270,
-              "FOV_Degrees": 90
+              "Width": 256,
+              "Height": 256,
+              "FOV_Degrees": 60
             },
             {
               "ImageType": 2,
               "Width": 256,
-              "Height": 144,
-              "FOV_Degrees": 90
+              "Height": 256,
+              "FOV_Degrees": 60
             }],
           "X": 0.0,
           "Y": 0.0,
@@ -45,6 +45,22 @@
           "PointsPerSecond": 15000,
           "X": 0.5, "Y": 0, "Z": 0,
           "Roll": 0, "Pitch": 0, "Yaw" : 0,
+          "VerticalFOVUpper": 0,
+          "VerticalFOVLower": 0,
+          "HorizontalFOVStart": -180,
+          "HorizontalFOVEnd": 180,
+          "DrawDebugPoints": false,
+          "DataFrame": "SensorLocalFrame"
+        },
+        "lidar2": {
+          "SensorType": 6,
+          "Enabled": true,
+          "Range": 5,
+          "NumberOfChannels": 30,
+          "RotationsPerSecond": 15,
+          "PointsPerSecond": 15000,
+          "X": 0.5, "Y": 0, "Z": 0,
+          "Roll": 0, "Pitch": 90, "Yaw" : 0,
           "VerticalFOVUpper": 0,
           "VerticalFOVLower": 0,
           "HorizontalFOVStart": -180,
