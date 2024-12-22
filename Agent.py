@@ -206,7 +206,7 @@ class DDPGAgent:
             'mean_length': mean_length,
             'success_rate': success_rate
         }
-        
+
 class PPOAgent:
     def __init__(self, env, config):
         self.config = config
@@ -240,3 +240,116 @@ class PPOAgent:
 
     def save(self, path):
         self.model.save(path)
+
+class PPOAgent:
+    def __init__(self, env, config):
+        self.config = config
+        policy_kwargs = dict(
+            features_extractor_class=CustomFeaturesExtractor,
+            features_extractor_kwargs=dict(features_dim=32),
+            net_arch=[dict(pi=[256, 256, 256], vf=[256, 256])],
+            config=config,
+            optimizer_class=th.optim.Adam,
+            optimizer_kwargs=dict(
+                eps=1e-5,
+                weight_decay=1e-4,
+                amsgrad=True
+            )
+        )
+        self.model = PPO(
+            "MultiInputPolicy",
+            env,
+            policy_kwargs=policy_kwargs,
+            verbose=1,
+            gamma=0.9999,
+            n_steps=2048,
+            batch_size=64,
+            n_epochs=10,
+            learning_rate=self.config["learning_rate"],
+            device=th.device(self.config['device'])
+        )
+
+    def train(self, total_timesteps, callback):
+        self.model.learn(total_timesteps=total_timesteps, callback=callback)
+
+    def save(self, path):
+        self.model.save(path)
+
+
+class HumanGuidedDDPGAgent(DDPGAgent):
+    def __init__(self, env, config):
+        super().__init__(env, config)
+        self.demo_buffer = HumanDemonstrationBuffer(
+            buffer_size=50000,  # Adjust size as needed
+            observation_space=env.observation_space,
+            action_space=env.action_space,
+            device=config['device']
+        )
+        self.demo_ratio = 0.2  # Ratio of demonstration data in training batch
+        
+    def add_demonstration(self, obs: Dict[str, np.ndarray], action: np.ndarray, 
+                         reward: float, done: bool):
+        """Add human demonstration to demo buffer"""
+        self.demo_buffer.add(obs, action, reward, done)
+        
+    def _demo_train_step(self, gradient_steps: int) -> None:
+        """Modified training step incorporating demonstration data"""
+        for _ in range(gradient_steps):
+            # Sample from both buffers
+            replay_samples = self.model.replay_buffer.sample(
+                int(self.model.batch_size * (1 - self.demo_ratio))
+            )
+            demo_samples = self.demo_buffer.sample(
+                int(self.model.batch_size * self.demo_ratio)
+            )
+            
+            # Combine samples
+            combined_samples = ReplayBufferSamples(
+                observations={
+                    key: th.cat([replay_samples.observations[key], 
+                               demo_samples.observations[key]])
+                    for key in replay_samples.observations.keys()
+                },
+                actions=th.cat([replay_samples.actions, demo_samples.actions]),
+                next_observations={
+                    key: th.cat([replay_samples.next_observations[key], 
+                               demo_samples.next_observations[key]])
+                    for key in replay_samples.next_observations.keys()
+                },
+                rewards=th.cat([replay_samples.rewards, demo_samples.rewards]),
+                dones=th.cat([replay_samples.dones, demo_samples.dones])
+            )
+            
+            # Calculate losses with demonstration data
+            with th.no_grad():
+                next_actions = self.model.actor_target(combined_samples.next_observations)
+                next_q_values = self.model.critic_target(
+                    combined_samples.next_observations, 
+                    next_actions
+                )
+                target_q_values = combined_samples.rewards + \
+                    (1 - combined_samples.dones) * self.model.gamma * next_q_values
+            
+            # Update critic
+            current_q_values = self.model.critic(
+                combined_samples.observations,
+                combined_samples.actions
+            )
+            critic_loss = ((target_q_values - current_q_values) ** 2).mean()
+            
+            self.model.critic.optimizer.zero_grad()
+            critic_loss.backward()
+            self.model.critic.optimizer.step()
+            
+            # Update actor
+            actor_loss = -self.model.critic(
+                combined_samples.observations,
+                self.model.actor(combined_samples.observations)
+            ).mean()
+            
+            self.model.actor.optimizer.zero_grad()
+            actor_loss.backward()
+            self.model.actor.optimizer.step()
+            
+            # Update target networks
+            self.model._target_soft_update()
