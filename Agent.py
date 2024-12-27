@@ -241,41 +241,6 @@ class PPOAgent:
     def save(self, path):
         self.model.save(path)
 
-class PPOAgent:
-    def __init__(self, env, config):
-        self.config = config
-        policy_kwargs = dict(
-            features_extractor_class=CustomFeaturesExtractor,
-            features_extractor_kwargs=dict(features_dim=32),
-            net_arch=[dict(pi=[256, 256, 256], vf=[256, 256])],
-            config=config,
-            optimizer_class=th.optim.Adam,
-            optimizer_kwargs=dict(
-                eps=1e-5,
-                weight_decay=1e-4,
-                amsgrad=True
-            )
-        )
-        self.model = PPO(
-            "MultiInputPolicy",
-            env,
-            policy_kwargs=policy_kwargs,
-            verbose=1,
-            gamma=0.9999,
-            n_steps=2048,
-            batch_size=64,
-            n_epochs=10,
-            learning_rate=self.config["learning_rate"],
-            device=th.device(self.config['device'])
-        )
-
-    def train(self, total_timesteps, callback):
-        self.model.learn(total_timesteps=total_timesteps, callback=callback)
-
-    def save(self, path):
-        self.model.save(path)
-
-
 class HumanGuidedDDPGAgent(DDPGAgent):
     def __init__(self, env, config):
         super().__init__(env, config)

@@ -8,7 +8,8 @@ import os
 
 def train_ddpg(drone_name, config, folder_name):
     env = AirsimEnv(drone_name, config)
-    agent = HumanGuidedDDPGAgent(env, config)
+    # agent = HumanGuidedDDPGAgent(env, config)
+    agent = DDPGAgent(env, config)
 
     # initialize controller
     controller = DistanceBasedController(
@@ -42,7 +43,7 @@ def train_ddpg(drone_name, config, folder_name):
 
     callback_class = HumanGuidedCallback(config, folder_name)
     agent.train(total_timesteps=config['episodes'] * config['max_steps'], callback=callback_class)
-    agent.save(f"{config['train']}{folder_name}/ddpg_model.pth")
+    agent.save(f"{config['train']}{folder_name}/")
 
 def train_ppo(drone_name, config, folder_name):
     env = AirsimEnv(drone_name, config)
