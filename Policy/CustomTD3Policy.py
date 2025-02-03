@@ -2,8 +2,8 @@ from typing import Optional
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.td3.policies import TD3Policy, Actor
 from stable_baselines3.common.policies import ContinuousCritic
-from Network.CustomActor import CustomActor
-from Network.CustomCritic import CustomCritic
+from PolicyComponent.CustomActor import CustomActor
+from PolicyComponent.CustomCritic import CustomCritic
 
 class CustomTD3Policy(TD3Policy):
     def __init__(self, *args, **kwargs):

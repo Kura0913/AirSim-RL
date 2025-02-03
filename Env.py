@@ -8,7 +8,7 @@ import time
 
 class AirsimEnv(gym.Env):
     def __init__(self, drone_name, config:dict, camera_name = "camera", goal_name = "BP_Grid", start_point_name = "BP_StartPoint",
-                 distance_sensor_list = ["front", "left", "right", "back", "lfront", "rfront", "lfbottom", "rfbottom", "rbbottom", "lbbottom", 'top'], lidar_list = ['lidar1', 'lidar2']):
+                distance_sensor_list = ["front", "left", "right", "back", "lfront", "rfront", "lfbottom", "rfbottom", "rbbottom", "lbbottom", 'top'], lidar_list = ['lidar1', 'lidar2']):
         # config setting
         self.config = config
         # env variable
@@ -31,14 +31,9 @@ class AirsimEnv(gym.Env):
         self.episode = 0
         self.episode_rewards = []
         self.end_eposide = False
-        # define action sapce, observation space
-        # self.action_space = spaces.Box(low=-1, high=1, shape=(3,))
         self.action_space = spaces.Box(low=-1, high=1, shape=(2,))
         self.observation_space = spaces.Dict({
-            'depth_image': spaces.Box(low=0, high=255, shape=(1, self.target_resize[0], self.target_resize[1])),
-            'position': spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
-            # 'goal': spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
-            'distance': spaces.Box(low=0, high=np.inf, shape=(1,))
+            'depth_image': spaces.Box(low=0, high=255, shape=(1, self.target_resize[0], self.target_resize[1]))
         })
 
         self.start_pose = self._load_start_point()
@@ -114,17 +109,9 @@ class AirsimEnv(gym.Env):
         depth_image = np.array(depth_image * 255, dtype=np.uint8)
         depth_image_resized = np.resize(depth_image, self.target_resize)
         depth_image_final = np.expand_dims(depth_image_resized, axis=0)
-        # get drone position
-        position = self.client.getMultirotorState(self.drone_name).kinematics_estimated.position.to_numpy_array()
-
-        # calculate distance to goal position
-        distance = np.linalg.norm(position - self.goal_position)
 
         return {
-            'depth_image': depth_image_final,
-            'position': position,
-            'goal': self.goal_position,
-            'distance': np.array([distance])
+            'depth_image': depth_image_final
         }
 
     def _check_done(self, obs):
@@ -133,10 +120,8 @@ class AirsimEnv(gym.Env):
         '''
         collision_info = self.client.simGetCollisionInfo()
         if collision_info.has_collided and self.goal_name in collision_info.object_name: # reach destination
-            print('finish mission')
             return True, True
         if collision_info.has_collided: # collision happend or steps reach max_steps
-            print(f"collision object:{collision_info.object_name}")
             return True, False
         return False, False # episode continue
     

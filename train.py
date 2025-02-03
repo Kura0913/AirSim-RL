@@ -1,6 +1,6 @@
 from Env import AirsimEnv
-from Agent import DDPGAgent, PPOAgent, HumanGuidedDDPGAgent
-from CustomCallback import CustomCallback, HumanGuidedCallback
+from Agent import DDPGAgent, PPOAgent
+from CustomCallback import DDPGCustomCallback, PPOCustomCallback
 from DistanceBasedController import DistanceBasedController
 from datetime import datetime
 import json
@@ -8,10 +8,49 @@ import os
 
 def train_ddpg(drone_name, config, folder_name):
     env = AirsimEnv(drone_name, config)
-    # agent = HumanGuidedDDPGAgent(env, config)
     agent = DDPGAgent(env, config)
 
-    # initialize controller
+    # Create full path for saving
+    save_path = os.path.join(config['train'], folder_name)
+    os.makedirs(save_path, exist_ok=True)
+
+    # Load pretrained model if specified
+    if config['load_model']:
+        try:
+            print(f"Loading pretrained model from {config['model_load_path']}")
+            agent.load(config['model_load_path'])
+            # Save pretrained model information
+            save_pretrain_info(save_path, config['model_load_path'])
+            print("Pretrained model loaded successfully")
+        except Exception as e:
+            print(f"Error loading pretrained model: {str(e)}")
+            print("Training will continue with freshly initialized model")
+
+    callback_class = DDPGCustomCallback(config, folder_name)
+    agent.train(total_timesteps=config['episodes'] * config['max_steps'], callback=callback_class)
+    agent.save(f"{config['train']}{folder_name}/")
+
+def train_ppo(drone_name, config, folder_name):
+    env = AirsimEnv(drone_name, config)
+    agent = PPOAgent(env, config)
+
+    # Create full path for saving
+    save_path = os.path.join(config['train'], folder_name)
+    os.makedirs(save_path, exist_ok=True)
+
+    # Load pretrained model if specified
+    if config['load_model']:
+        try:
+            print(f"Loading pretrained model from {config['model_load_path']}")
+            agent.load(config['model_load_path'])
+            # Save pretrained model information
+            save_pretrain_info(save_path, config['model_load_path'])
+            print("Pretrained model loaded successfully")
+        except Exception as e:
+            print(f"Error loading pretrained model: {str(e)}")
+            print("Training will continue with freshly initialized model")
+
+    # Initialize controller
     controller = DistanceBasedController(
         client=env._get_airsim_client(),
         drone_name="drone_1",
@@ -33,24 +72,19 @@ def train_ddpg(drone_name, config, folder_name):
             )
             controller.save_demonstrations(demos, demo_file)
     
-    # Load demonstrations into agent's buffer
+    # Load demonstrations into agent's buffer if PPO implementation supports it
     if config['load_demo']:
         demo_path = os.path.join(controller.demos_dir, demo_file)
         if os.path.exists(demo_path):
-            controller.load_demonstrations_to_agent(agent, demo_file)
+            print("Note: PPO doesn't currently support demonstration loading, skipping...")
+            # Future implementation could add demo support:
+            # controller.load_demonstrations_to_agent(agent, demo_file)
         else:
             print(f"No demonstration file found at {demo_path}")
 
-    callback_class = HumanGuidedCallback(config, folder_name)
+    callback_class = PPOCustomCallback(config, folder_name)
     agent.train(total_timesteps=config['episodes'] * config['max_steps'], callback=callback_class)
-    agent.save(f"{config['train']}{folder_name}/")
-
-def train_ppo(drone_name, config, folder_name):
-    env = AirsimEnv(drone_name, config)
-    agent = PPOAgent(env, config)
-    callback_class = CustomCallback(config, folder_name)
-    agent.train(total_timesteps=config['episodes'] * config['max_steps'], callback=callback_class)
-    agent.save(f"{config['train']}{folder_name}/ppo_model.pth")
+    agent.save(f"{save_path}/")
 
 def load_config():
     with open('config.json', 'r') as file:
@@ -94,6 +128,11 @@ def collect_demonstrations(env, agent, controller: DistanceBasedController,
             step += 1
             
         print(f"Demonstration Episode {episode + 1}: Reward = {episode_reward}")
+
+def save_pretrain_info(folder_path, model_path):
+    """Save pretrained model information to a file"""
+    with open(os.path.join(folder_path, "pretrain_model.txt"), 'w') as f:
+        f.write(f"Pretrained model loaded from: {model_path}\n")
 
 def main():
     drone_name = load_drone_name()

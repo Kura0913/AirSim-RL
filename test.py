@@ -23,10 +23,9 @@ def save_results(folder_path, test_path, avg_reward, completion_rate):
         f.write(f"Average Reward: {avg_reward:.2f}\n")
         f.write(f"Completion Rate: {completion_rate:.2f}%\n")
 
-def create_plots(episode_rewards, folder_path):
+def create_plots(episode_rewards, folder_path, completed_episodes):
     """Create and save test result plots"""
     episodes = np.arange(1, len(episode_rewards) + 1)
-    completed_episodes = []  # Will be populated during testing
     
     # 1. Episode Rewards Plot
     plt.figure(figsize=(12, 6))
@@ -68,7 +67,7 @@ def create_plots(episode_rewards, folder_path):
     plt.xlabel('Episode', fontsize=10)
     plt.ylabel('Completion Rate (%)', fontsize=10)
     plt.grid(True, linestyle='--', alpha=0.7)
-    plt.ylim(0, 100)
+    plt.ylim(0, 110)
     plt.savefig(os.path.join(folder_path, "completion_rate.png"), dpi=300, bbox_inches='tight')
     plt.close()
 
@@ -82,8 +81,12 @@ def test_model(env:AirsimEnv, config, test_episodes):
     else:
         raise ValueError(f"Unsupported algorithm: {config['rl_algorithm']}")
 
+    model_code = input("Please enter the model code (press Enter to use default): ").strip()
     # Load the trained model
-    agent.load(config["test_path"])
+    if len(model_code) <= 0:
+        agent.load(config["test_path"])
+    else:
+        agent.load(config['test_path'], model_code)
 
     # Run test episodes
     episode_rewards = []
@@ -129,14 +132,14 @@ def main():
     # Load configuration
     config = load_config()
     drone_name = load_drone_name()
-    env = AirsimEnv(drone_name, config)
+    
     # Create test folder
     folder_name = create_test_folder()
     test_folder = os.path.join(config['test'], folder_name)
     os.makedirs(test_folder, exist_ok=True)
 
     # Initialize your environment here
-    # env = YourEnvironment()  # You need to implement this
+    env = AirsimEnv(drone_name, config)  # You need to implement this
     
     # Set number of test episodes
     test_episodes = 100  # You can modify this or make it configurable
@@ -146,7 +149,7 @@ def main():
         env, config, test_episodes)
     
     # Create plots
-    create_plots(episode_rewards, test_folder)
+    create_plots(episode_rewards, test_folder, completed_episodes)
     
     # Save results
     save_results(test_folder, config['test_path'], avg_reward, completion_rate)

@@ -6,9 +6,9 @@ import numpy as np
 from datetime import datetime
 import json
 
-class CustomCallback(BaseCallback):
+class BaseCustomCallback(BaseCallback):
     def __init__(self, config, folder_name, verbose=0):
-        super(CustomCallback, self).__init__(verbose)
+        super(BaseCustomCallback, self).__init__(verbose)
         self.config = config
         self.folder_name = folder_name
         self.desired_episodes = self.config['episodes']
@@ -19,9 +19,7 @@ class CustomCallback(BaseCallback):
         self.completed_episodes = []
 
     def _on_step(self) -> bool:
-        # Update current episode reward
         self.current_episode_reward += self.locals['rewards'][0]
-        # Check if the episode is over
         done = self.locals['dones'][0]
         if done:            
             self.curr_episode += 1
@@ -32,84 +30,40 @@ class CustomCallback(BaseCallback):
             if completed:
                 self.completed_episodes.append(self.curr_episode)
 
-            # Output the rewards of the current episode on the console
-            print(f"Episode: {self.curr_episode:4d}/{self.desired_episodes} end with reward: {self.current_episode_reward}, mission satus: {completion_status}")
+            print(f"Episode: {self.curr_episode:4d}/{self.desired_episodes} end with reward: {self.current_episode_reward:.2f}, mission status: {completion_status}")
 
-            # Reset current episode reward
             self.current_episode_reward = 0
 
-            # Check if the model needs to be saved
             if self.curr_episode in self.save_episodes:
                 self._save_model()
                 self._save_training_plots(str(self.curr_episode))
 
-            # Check whether the specified number of episodes is reached
             if self.curr_episode >= self.desired_episodes:
                 self._save_training_plots()
                 return False
 
         return True
-    
-    def _save_model(self):
-        try:
-            path = f"{self.config['train']}{self.folder_name}/"
-            os.makedirs(path, exist_ok=True)
-            base_path = f"{path}{self.config['rl_algorithm'].lower()}_episode_{self.curr_episode}"
-            
-            # 1. Save network weights
-            if hasattr(self.model, 'policy'):
-                policy_path = f"{base_path}_policy.pth"
-                th.save(self.model.policy.state_dict(), policy_path)
-                print(f"Policy network saved to {policy_path}")
-            
-            if hasattr(self.model, 'actor'):
-                actor_path = f"{base_path}_actor.pth"
-                th.save(self.model.actor.state_dict(), actor_path)
-                print(f"Actor network saved to {actor_path}")
-            
-            if hasattr(self.model, 'critic'):
-                critic_path = f"{base_path}_critic.pth"
-                th.save(self.model.critic.state_dict(), critic_path)
-                print(f"Critic network saved to {critic_path}")
-            
-            # 2. Save training parameters
-            params = {
-                'learning_rate': getattr(self.model, 'learning_rate', None),
-                'gamma': getattr(self.model, 'gamma', None),
-                'batch_size': getattr(self.model, 'batch_size', None),
-                'learning_starts': getattr(self.model, 'learning_starts', None),
-                'gradient_steps': getattr(self.model, 'gradient_steps', None),
-                'action_noise': str(getattr(self.model, 'action_noise', None))
-            }
-            
-            params_path = f"{base_path}_params.json"
-            with open(params_path, 'w') as f:
-                json.dump({k: v for k, v in params.items() if v is not None}, f, indent=4)
-            print(f"Training parameters saved to {params_path}")
-            
-            # 3. Save training statistics
-            training_stats = {
-                'episode': self.curr_episode,
-                'episode_rewards': self.episode_rewards,
-                'completed_episodes': self.completed_episodes,
-                'current_reward': self.current_episode_reward,
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'average_reward': float(np.mean(self.episode_rewards)) if self.episode_rewards else 0,
-                'max_reward': float(np.max(self.episode_rewards)) if self.episode_rewards else 0,
-                'min_reward': float(np.min(self.episode_rewards)) if self.episode_rewards else 0,
-                'completion_rate': float(len(self.completed_episodes)/max(1, len(self.episode_rewards))*100)
-            }
-            
-            stats_path = f"{base_path}_stats.json"
-            with open(stats_path, 'w') as f:
-                json.dump(training_stats, f, indent=4)
-            print(f"Training statistics saved to {stats_path}")
 
-        except Exception as e:
-            print(f"Warning: Failed to save at episode {self.curr_episode}")
-            print(f"Error: {str(e)}")
-            import traceback
-            traceback.print_exc()
+    def _save_model(self):
+        raise NotImplementedError
+
+    def _save_base_stats(self, base_path):
+        training_stats = {
+            'episode': self.curr_episode,
+            'episode_rewards': self.episode_rewards,
+            'completed_episodes': self.completed_episodes,
+            'current_reward': self.current_episode_reward,
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'average_reward': float(np.mean(self.episode_rewards)) if self.episode_rewards else 0,
+            'max_reward': float(np.max(self.episode_rewards)) if self.episode_rewards else 0,
+            'min_reward': float(np.min(self.episode_rewards)) if self.episode_rewards else 0,
+            'completion_rate': float(len(self.completed_episodes)/max(1, len(self.episode_rewards))*100)
+        }
+        
+        stats_path = f"{base_path}_stats.json"
+        with open(stats_path, 'w') as f:
+            json.dump(training_stats, f, indent=4)
+        print(f"Training statistics saved to {stats_path}")
 
     def _save_training_plots(self, episode_str=""):
         """
@@ -117,6 +71,7 @@ class CustomCallback(BaseCallback):
         1. Episode rewards plot
         2. Moving average rewards plot
         3. Completion rate plot
+        4. Moving Completion Rate Plot
         """
         if episode_str != "":
             episode_str = "_" + episode_str
@@ -162,7 +117,7 @@ class CustomCallback(BaseCallback):
             plt.figure(figsize=(12, 6))
             
             # Dynamically resize window
-            window_size = min(20, len(self.episode_rewards))
+            window_size = min(100, len(self.episode_rewards))
             if window_size > 0:
                 moving_avg = np.convolve(self.episode_rewards, 
                                     np.ones(window_size)/window_size, 
@@ -224,11 +179,62 @@ class CustomCallback(BaseCallback):
             
             plt.savefig(completion_path, dpi=300, bbox_inches='tight')
             plt.close()
+
+            # 4. Moving Completion Rate Plot
+            plt.figure(figsize=(12, 6))
+
+            # Calculate moving completion rate with window size 100
+            window_size = min(100, len(completion_rates))
+            if window_size > 0:
+                moving_completion = np.convolve(completion_rates, 
+                                            np.ones(window_size)/window_size, 
+                                            mode='valid')
+                # The x-axis should start from window_size
+                mc_episodes = np.arange(window_size, len(completion_rates) + 1, dtype=int)
+                
+                # Plot original completion rates with transparency
+                plt.plot(episodes, completion_rates, 
+                        color='#2ca02c',  # green
+                        alpha=0.3, 
+                        linewidth=1,
+                        label='Original Completion Rate')
+                
+                # Plot moving completion rate
+                plt.plot(mc_episodes, moving_completion, 
+                        color='#d62728',  # red
+                        linewidth=1.5,
+                        label=f'{window_size}-Episode Moving Completion Rate')
+                
+                plt.title('Moving Task Completion Rate', fontsize=12, pad=10)
+                plt.xlabel('Episode', fontsize=10)
+                plt.ylabel('Completion Rate (%)', fontsize=10)
+                plt.grid(True, linestyle='--', alpha=0.7)
+                plt.ylim(0, 100)  # range: 0-100%
+                plt.legend()
+                
+                plt.gca().xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+                
+                # Add final moving completion rate information
+                final_moving_rate = moving_completion[-1] if len(moving_completion) > 0 else 0
+                stats_text = f'Final Moving Completion Rate: {final_moving_rate:.2f}%'
+                plt.text(0.02, 0.98, stats_text,
+                        transform=plt.gca().transAxes,
+                        verticalalignment='top',
+                        fontsize=10,
+                        bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+                
+                moving_completion_path = f"{path}moving_completion_rate{episode_str}.png"
+                plt.savefig(moving_completion_path, dpi=300, bbox_inches='tight')
+                plt.close()
+                
+                print(f"4. Moving Completion Rate Plot: {moving_completion_path}")
             
             # Save raw data as JSON
             stats_data = {
                 'episode_rewards': [float(x) for x in self.episode_rewards],
                 'moving_average': [float(x) for x in moving_avg] if moving_avg is not None else [],
+                'completed_episodes':[int(x) for x in self.completed_episodes],
+                'moving_completion_rate': [float(x) for x in moving_completion],
                 'completion_rates': [float(x) for x in completion_rates],
                 'max_reward': float(max_reward),
                 'min_reward': float(min_reward),
@@ -249,39 +255,107 @@ class CustomCallback(BaseCallback):
             import traceback
             traceback.print_exc()
 
-    def get_episode_rewards(self):
-        return self.episode_rewards
-    
-class HumanGuidedCallback(CustomCallback):
-    def __init__(self, config, folder_name, verbose=0):
-        super().__init__(config, folder_name, verbose)
-        self.demo_rewards = []
-        self.demo_episodes = 0
-        
-    def _on_step(self) -> bool:
-        result = super()._on_step()
-        
-        # Track demonstration statistics
-        if hasattr(self.model, 'demo_buffer'):
-            demo_size = len(self.model.demo_buffer.rewards)
-            if demo_size > 0:
-                avg_demo_reward = np.mean(self.model.demo_buffer.rewards[:demo_size])
-                self.demo_rewards.append(avg_demo_reward)
-        
-        return result
-    
-    def _save_training_plots(self, episode_str=""):
-        super()._save_training_plots(episode_str)
-        
-        # Add demonstration statistics plot
-        if self.demo_rewards:
+class DDPGCustomCallback(BaseCustomCallback):
+    def _save_model(self):
+        try:
             path = f"{self.config['train']}{self.folder_name}/"
-            plt.figure(figsize=(12, 6))
-            plt.plot(self.demo_rewards, label='Demo Rewards')
-            plt.plot(self.episode_rewards, label='Training Rewards')
-            plt.title('Training vs Demonstration Rewards')
-            plt.xlabel('Episode')
-            plt.ylabel('Reward')
-            plt.legend()
-            plt.savefig(f"{path}demo_comparison{episode_str}.png")
-            plt.close()
+            os.makedirs(path, exist_ok=True)
+            base_path = f"{path}{self.curr_episode}"
+            
+            # 1. Save network weights
+            if hasattr(self.model, 'policy'):
+                policy_path = f"{base_path}_policy.pth"
+                th.save(self.model.policy.state_dict(), policy_path)
+                print(f"Policy network saved to {policy_path}")
+            
+            if hasattr(self.model, 'actor'):
+                actor_path = f"{base_path}_actor.pth"
+                th.save(self.model.actor.state_dict(), actor_path)
+                print(f"Actor network saved to {actor_path}")
+            
+            if hasattr(self.model, 'critic'):
+                critic_path = f"{base_path}_critic.pth"
+                th.save(self.model.critic.state_dict(), critic_path)
+                print(f"Critic network saved to {critic_path}")
+            
+            # 2. Save training parameters
+            params = {
+                'learning_rate': getattr(self.model, 'learning_rate', None),
+                'gamma': getattr(self.model, 'gamma', None),
+                'batch_size': getattr(self.model, 'batch_size', None),
+                'learning_starts': getattr(self.model, 'learning_starts', None),
+                'gradient_steps': getattr(self.model, 'gradient_steps', None),
+                'action_noise': str(getattr(self.model, 'action_noise', None))
+            }
+            
+            params_path = f"{base_path}_params.json"
+            with open(params_path, 'w') as f:
+                json.dump({k: v for k, v in params.items() if v is not None}, f, indent=4)
+            print(f"Training parameters saved to {params_path}")
+            
+            # 3. Save training statistics
+            training_stats = {
+                'episode': self.curr_episode,
+                'episode_rewards': self.episode_rewards,
+                'completed_episodes': self.completed_episodes,
+                'current_reward': self.current_episode_reward,
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'average_reward': float(np.mean(self.episode_rewards)) if self.episode_rewards else 0,
+                'max_reward': float(np.max(self.episode_rewards)) if self.episode_rewards else 0,
+                'min_reward': float(np.min(self.episode_rewards)) if self.episode_rewards else 0,
+                'completion_rate': float(len(self.completed_episodes)/max(1, len(self.episode_rewards))*100)
+            }
+            
+            stats_path = f"{base_path}_stats.json"
+            with open(stats_path, 'w') as f:
+                json.dump(training_stats, f, indent=4)
+            print(f"Training statistics saved to {stats_path}")
+
+        except Exception as e:
+            print(f"Warning: Failed to save at episode {self.curr_episode}")
+            print(f"Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
+class PPOCustomCallback(BaseCustomCallback):
+    def _save_model(self):
+        try:
+            path = f"{self.config['train']}{self.folder_name}/"
+            os.makedirs(path, exist_ok=True)
+            base_path = f"{path}{self.curr_episode}"
+            
+            # 1. Save network weights
+            if hasattr(self.model, 'policy'):
+                policy_path = f"{base_path}_policy.pth"
+                th.save(self.model.policy.state_dict(), policy_path)
+                print(f"Policy network saved to {policy_path}")
+                
+                value_net_path = f"{base_path}_value_net.pth"
+                th.save(self.model.policy.value_net.state_dict(), value_net_path)
+                print(f"Value network saved to {value_net_path}")
+            
+            # 2. Save training parameters
+            params = {
+                'learning_rate': getattr(self.model, 'learning_rate', None),
+                'gamma': getattr(self.model, 'gamma', None),
+                'n_steps': getattr(self.model, 'n_steps', None),
+                'n_epochs': getattr(self.model, 'n_epochs', None),
+                'batch_size': getattr(self.model, 'batch_size', None),
+                'clip_range': str(getattr(self.model, 'clip_range', None)),
+                'ent_coef': getattr(self.model, 'ent_coef', None),
+                'vf_coef': getattr(self.model, 'vf_coef', None)
+            }
+            
+            params_path = f"{base_path}_params.json"
+            with open(params_path, 'w') as f:
+                json.dump({k: v for k, v in params.items() if v is not None}, f, indent=4)
+            print(f"Training parameters saved to {params_path}")
+            
+            # 保存基本統計數據
+            self._save_base_stats(base_path)
+
+        except Exception as e:
+            print(f"Warning: Failed to save at episode {self.curr_episode}")
+            print(f"Error: {str(e)}")
+            import traceback
+            traceback.print_exc()

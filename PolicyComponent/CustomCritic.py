@@ -1,35 +1,10 @@
-import torch as th
 import torch.nn as nn
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.policies import ContinuousCritic
 from stable_baselines3.common.preprocessing import get_action_dim
-from typing import List, Type, Tuple
+from typing import List, Type
 import gymnasium.spaces as spaces
-
-class CustomCriticNetwork(nn.Module):
-    def __init__(self, features_dim: int, action_dim: int):
-        super().__init__()
-        
-        # Layer definitions
-        self.fc1 = nn.Linear(features_dim + action_dim, 256)  # 32(state) + 2(action)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 1)
-
-        # Activation functions
-        self.relu = nn.ReLU()
-        self.hard_tanh = nn.Tanh()
-    
-    def forward(self, x):
-        # Layer 1: FC + ReLU
-        x = self.relu(self.fc1(x))
-        
-        # Layer 2: FC + ReLU
-        x = self.relu(self.fc2(x))
-        
-        # Layer 3: FC + Hard Tanh
-        x = self.hard_tanh(self.fc3(x))
-        
-        return x
+from Network.ValueNetwork import ValueNetwork
     
 class CustomCritic(ContinuousCritic):
     def __init__(
@@ -58,6 +33,6 @@ class CustomCritic(ContinuousCritic):
         self.n_critics = n_critics
         self.q_networks: List[nn.Module] = []
         for idx in range(n_critics):
-            q_net = CustomCriticNetwork(features_dim, action_dim)
+            q_net = ValueNetwork(features_dim + action_dim)
             self.add_module(f"qf{idx}", q_net)
             self.q_networks.append(q_net)
