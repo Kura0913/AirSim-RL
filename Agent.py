@@ -49,20 +49,20 @@ class DDPGAgent:
     def train(self, total_timesteps, callback):
         self.model.learn(total_timesteps=total_timesteps, callback=callback)
 
-    def save(self, path, model_code:str=''):
+    def save(self, path):
         """Save model components separately instead of saving the whole model"""
         try:
             # Save policy network state dict
             policy_state = self.model.policy.state_dict()
-            th.save(policy_state, f"{path}{model_code}_policy.pth")
+            th.save(policy_state, f"{path}_policy.pth")
 
             # Save actor network state dict
             actor_state = self.model.actor.state_dict()
-            th.save(actor_state, f"{path}{model_code}_actor.pth")
+            th.save(actor_state, f"{path}_actor.pth")
 
             # Save critic network state dict
             critic_state = self.model.critic.state_dict()
-            th.save(critic_state, f"{path}{model_code}_critic.pth")
+            th.save(critic_state, f"{path}_critic.pth")
 
             # Save training parameters
             training_params = {
@@ -84,19 +84,19 @@ class DDPGAgent:
             import traceback
             traceback.print_exc()
 
-    def load(self, path):
+    def load(self, path, model_code:str=''):
         """Load model components separately"""
         try:
             # Load policy network
-            policy_state = th.load(f"{path}_policy.pth")
+            policy_state = th.load(f"{path}{model_code}_policy.pth")
             self.model.policy.load_state_dict(policy_state)
 
             # Load actor network
-            actor_state = th.load(f"{path}_actor.pth")
+            actor_state = th.load(f"{path}{model_code}_actor.pth")
             self.model.actor.load_state_dict(actor_state)
 
             # Load critic network
-            critic_state = th.load(f"{path}_critic.pth")
+            critic_state = th.load(f"{path}{model_code}_critic.pth")
             self.model.critic.load_state_dict(critic_state)
 
             # Load parameters
