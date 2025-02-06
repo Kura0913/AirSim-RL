@@ -34,6 +34,17 @@ def create_plots(episode_rewards, folder_path, completed_episodes):
     plt.xlabel('Episode', fontsize=10)
     plt.ylabel('Reward', fontsize=10)
     plt.grid(True, linestyle='--', alpha=0.7)
+
+    plt.gca().xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
+    max_reward = max(episode_rewards) if episode_rewards else 0
+    min_reward = min(episode_rewards) if episode_rewards else 0
+    stats_text = f'Max Reward: {max_reward:.2f}\nMin Reward: {min_reward:.2f}'
+    plt.text(0.02, 0.98, stats_text, 
+            transform=plt.gca().transAxes,
+            verticalalignment='top',
+            fontsize=10,
+            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     plt.savefig(os.path.join(folder_path, "episode_rewards.png"), dpi=300, bbox_inches='tight')
     plt.close()
 
@@ -52,6 +63,9 @@ def create_plots(episode_rewards, folder_path, completed_episodes):
         plt.ylabel('Reward', fontsize=10)
         plt.grid(True, linestyle='--', alpha=0.7)
         plt.legend()
+
+        plt.gca().xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
         plt.savefig(os.path.join(folder_path, "moving_average_rewards.png"), dpi=300, bbox_inches='tight')
     plt.close()
 
@@ -68,6 +82,16 @@ def create_plots(episode_rewards, folder_path, completed_episodes):
     plt.ylabel('Completion Rate (%)', fontsize=10)
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.ylim(0, 110)
+
+    plt.gca().xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
+    final_rate = completion_rates[-1] if completion_rates else 0
+    stats_text = f'Final Completion Rate: {final_rate:.2f}%'
+    plt.text(0.02, 0.98, stats_text,
+            transform=plt.gca().transAxes,
+            verticalalignment='top',
+            fontsize=10,
+            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     plt.savefig(os.path.join(folder_path, "completion_rate.png"), dpi=300, bbox_inches='tight')
     plt.close()
 
@@ -105,7 +129,7 @@ def test_model(env:AirsimEnv, config, test_episodes):
             if done:
                 if info.get('completed', False):
                     completed_episodes.append(episode + 1)
-                print(f"Episode {episode + 1}/{test_episodes}: Reward = {episode_reward:.2f}")
+                print(f"Episode {episode + 1}/{test_episodes}: Reward = {episode_reward:.2f}, Completed: {info['completed']}")
         
         episode_rewards.append(episode_reward)
 
@@ -127,6 +151,14 @@ def get_drone_names(settings_path):
         drone_names = list(data.get("Vehicles", {}).keys())  # Get all keys of "Vehicles" as drone names
         print(f"drone list: {drone_names}")
         return drone_names
+
+def save_row_data(path, episode_rewards, completed_episodes):
+    stats_data = {
+        'episode_rewards': [float(x) for x in episode_rewards],
+        'completed_episodes':[int(x) for x in completed_episodes]
+    }
+    with open(f"{path}/training_stats.json", 'w') as f:
+                json.dump(stats_data, f, indent=4)
 
 def main():
     # Load configuration
@@ -151,7 +183,10 @@ def main():
     # Create plots
     create_plots(episode_rewards, test_folder, completed_episodes)
     
-    # Save results
+    # save row data as json file
+    save_row_data(test_folder, episode_rewards, completed_episodes)
+
+    # Save results as txt file
     save_results(test_folder, config['test_path'], avg_reward, completion_rate)
     
     print(f"\nTest results saved to: {test_folder}")
