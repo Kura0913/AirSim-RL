@@ -18,7 +18,11 @@ def train_ddpg(drone_name, config, folder_name):
     if config['load_model']:
         try:
             print(f"Loading pretrained model from {config['model_load_path']}")
-            agent.load(config['model_load_path'])
+            model_code = input("Please enter the model code (press Enter to use default): ").strip()
+            if len(model_code) <= 0:
+                agent.load(config['model_load_path'])
+            else:
+                agent.load(config['model_load_path'], model_code)
             # Save pretrained model information
             save_pretrain_info(save_path, config['model_load_path'])
             print("Pretrained model loaded successfully")
