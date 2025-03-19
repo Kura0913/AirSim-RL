@@ -2,12 +2,9 @@ import numpy as np
 import airsim
 
 class DroneRewardCalculator:
-    def __init__(self, client: airsim.MultirotorClient, lidar_list, drone_name, start_position, goal_position, center_pixels=(16, 16)):
-        self.lidar_list = lidar_list
+    def __init__(self, client: airsim.MultirotorClient, drone_name, center_pixels=(16, 16)):
         self.client = client
         self.drone_name = drone_name
-        self.start_positon = start_position
-        self.goal_position = goal_position
         # Margin boundaries and constants
         self.d_soft = 2.0
         self.d_hard = 0.7
@@ -30,10 +27,6 @@ class DroneRewardCalculator:
         action_reward = self._get_action_reward(obs)
         r_t += action_reward
         
-        # margin_reward = self._calculate_margin_reward_lidar()
-        # r_t += margin_reward
-
-        # print(f'action reward: {action_reward}, margin reward: {margin_reward}')
         if done and not completed:
             return R_collision
         
@@ -69,33 +62,6 @@ class DroneRewardCalculator:
                 return -0.2  # approaching obstacles
         else:
             return -0.2
-
-    def _calculate_margin_reward_lidar(self):
-        # get point cloud data
-        point_cloud = []
-        for lidar_name in self.lidar_list:
-            point_cloud += self.client.getLidarData(lidar_name, self.drone_name).point_cloud
-        points = np.array(point_cloud, dtype=np.float32).reshape(-1, 3)
-
-        # calculate distance for each point
-        if points is None or len(points) == 0:
-            return 2
-        
-        distances = np.linalg.norm(points, axis=1)
-
-        d_obstacle = min(distances)
-
-        if d_obstacle < 0.0001:
-            d_obstacle = 0.0001
-
-        if d_obstacle < self.d_hard:
-            R_margin = -self.C2 / d_obstacle
-        elif d_obstacle < self.d_soft:
-            R_margin = -self.C1 * (1 - d_obstacle / self.d_soft)
-        else:
-            R_margin = 2
-
-        return R_margin
         
     def _get_center_region(self, depth_map, h, w):        
         # Make sure the center area is no larger than the original image

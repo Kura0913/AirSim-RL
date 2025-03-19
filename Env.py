@@ -5,10 +5,10 @@ from gymnasium import spaces
 import airsim
 import numpy as np
 import time
+import random
 
 class AirsimEnv(gym.Env):
-    def __init__(self, drone_name, config:dict, camera_name = "camera", goal_name = "BP_Grid", start_point_name = "BP_StartPoint",
-                distance_sensor_list = ["front", "left", "right", "back", "lfront", "rfront", "lfbottom", "rfbottom", "rbbottom", "lbbottom", 'top'], lidar_list = ['lidar1', 'lidar2']):
+    def __init__(self, drone_name, config:dict, camera_name = "camera", goal_name = "BP_Grid", start_point_name = "BP_StartPoint"):
         # config setting
         self.config = config
         # env variable
@@ -16,9 +16,6 @@ class AirsimEnv(gym.Env):
         self.camera_name = camera_name
         self.goal_name = goal_name
         self.start_point_name = start_point_name
-        # self.distance_sensor_list = distance_sensor_list
-        self.distance_sensor_list = ["front", "left", "right", "back"]
-        self.lidar_list = lidar_list
         self.target_resize = config['resize']
         # set airsim api client
         self.client = airsim.MultirotorClient()
@@ -36,14 +33,20 @@ class AirsimEnv(gym.Env):
             'depth_image': spaces.Box(low=0, high=255, shape=(1, self.target_resize[0], self.target_resize[1]))
         })
 
-        self.start_pose = self._load_start_point()
-        self.start_position = [self.start_pose.position.x_val, self.start_pose.position.y_val, self.start_pose.position.z_val]
+        self.start_poses = self._load_start_points() # get poses of all spawn points
+        self.map_num = len(self.start_poses) - 1 # get map num
+        self.start_pose = self.start_poses[0] # initial start point pose
+        self.start_position = [self.start_pose.position.x_val, self.start_pose.position.y_val, self.start_pose.position.z_val] # initial start point position
         self.goal_position = np.array(self._load_goal_position(2))
         # reward calculator
-        self.reward_calculator = DroneRewardCalculator(self.client, self.lidar_list, self.drone_name, self.start_position, self.goal_position)
+        self.reward_calculator = DroneRewardCalculator(self.client, self.drone_name)
 
     def reset(self, seed=None):
         reset_flag = True
+        map_idx = random.randint(0, self.map_num)
+        self.start_pose = self.start_poses[map_idx] # get random map's spawn point
+        self.start_position = [self.start_pose.position.x_val, self.start_pose.position.y_val, self.start_pose.position.z_val] # get spawn point position
+        print(f'Load map: {map_idx}')
         if seed is not None:
             np.random.seed(seed)
         while reset_flag:
@@ -85,12 +88,13 @@ class AirsimEnv(gym.Env):
     def _get_airsim_client(self):
         return self.client
     
-    def _load_start_point(self):
+    def _load_start_points(self):
         player_start_objects = self.client.simListSceneObjects(f'{self.start_point_name}[\w]*')
+        start_poses =  []
         for player_start_object in player_start_objects:
-            start_pose = self.client.simGetObjectPose(player_start_object)
+            start_poses.append(self.client.simGetObjectPose(player_start_object))
 
-        return start_pose
+        return start_poses
 
     def _load_goal_position(self, round_decimals):
         goal_objects = self.client.simListSceneObjects(f'{self.goal_name}[\w]*')
