@@ -5,14 +5,6 @@ class DroneRewardCalculator:
     def __init__(self, client: airsim.MultirotorClient, drone_name, center_pixels=(16, 16)):
         self.client = client
         self.drone_name = drone_name
-        # Margin boundaries and constants
-        self.d_soft = 2.0
-        self.d_hard = 0.7
-        self.C1 = 4.0
-        self.C2 = 6.0
-        self.collision_penalty = -2.0
-        self.reach_destination_reward = 2.0
-        self.obstacle_avoidance_reward = 0.5
         self.center_height, self.center_width = center_pixels
     
     def compute_reward(self, action, obs, curr_step, done:bool, completed:bool):
