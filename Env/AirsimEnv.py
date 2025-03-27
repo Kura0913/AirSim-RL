@@ -1,13 +1,13 @@
 import Tools.AirsimTools as airsimtools
-from RewardCalculator import DroneRewardCalculator
-import gymnasium as gym
+from RewardCalculator.RewardCalculator import DroneRewardCalculator
+from Env.AirsimBaseEnv import BaseMultirotorEnv
 from gymnasium import spaces
 import airsim
 import numpy as np
 import time
 import random
 
-class AirsimEnv(gym.Env):
+class AirsimEnv(BaseMultirotorEnv):
     def __init__(self, drone_name, config:dict, camera_name = "camera", goal_name = "BP_Grid", start_point_name = "BP_StartPoint"):
         # config setting
         self.config = config
@@ -16,7 +16,7 @@ class AirsimEnv(gym.Env):
         self.camera_name = camera_name
         self.goal_name = goal_name
         self.start_point_name = start_point_name
-        self.target_resize = config['resize']
+        self.target_resize = [config['resize']['width'], config['resize']['height']]
         # set airsim api client
         self.client = airsim.MultirotorClient()
         self.client.confirmConnection()

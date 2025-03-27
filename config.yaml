@@ -1,0 +1,24 @@
+training_setting:
+  device: cuda:0
+  load_pretrain_model: false
+  pretrain_model_path: ./run/train/
+  save_path: ./run/train/
+  episodes: 5000
+  max_steps: 700
+  save_episodes:
+    - 1000
+    - 2000
+    - 3000
+    - 4000
+  Env:
+    class_name: AirsimEnv
+    resize: 
+      width: 128
+      height: 128
+
+  Algorithm: PPO
+
+test_setting:
+  model_path: ./run/train/test_model_folder/
+  test_episodes: 100
+  save_path: ./run/test/

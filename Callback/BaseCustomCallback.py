@@ -76,7 +76,7 @@ class BaseCustomCallback(BaseCallback):
         if episode_str != "":
             episode_str = "_" + episode_str
         try:
-            path = f"{self.config['train']}{self.folder_name}/"
+            path = f"{self.config['save_path']}{self.folder_name}/"
             os.makedirs(path, exist_ok=True)
             
             rewards_path = f"{path}episode_rewards{episode_str}.png"
@@ -252,110 +252,5 @@ class BaseCustomCallback(BaseCallback):
             
         except Exception as e:
             print(f"Error saving training plots: {str(e)}")
-            import traceback
-            traceback.print_exc()
-
-class DDPGCustomCallback(BaseCustomCallback):
-    def _save_model(self):
-        try:
-            path = f"{self.config['train']}{self.folder_name}/"
-            os.makedirs(path, exist_ok=True)
-            base_path = f"{path}{self.curr_episode}"
-            
-            # 1. Save network weights
-            if hasattr(self.model, 'policy'):
-                policy_path = f"{base_path}_policy.pth"
-                th.save(self.model.policy.state_dict(), policy_path)
-                print(f"Policy network saved to {policy_path}")
-            
-            if hasattr(self.model, 'actor'):
-                actor_path = f"{base_path}_actor.pth"
-                th.save(self.model.actor.state_dict(), actor_path)
-                print(f"Actor network saved to {actor_path}")
-            
-            if hasattr(self.model, 'critic'):
-                critic_path = f"{base_path}_critic.pth"
-                th.save(self.model.critic.state_dict(), critic_path)
-                print(f"Critic network saved to {critic_path}")
-            
-            # 2. Save training parameters
-            params = {
-                'learning_rate': getattr(self.model, 'learning_rate', None),
-                'gamma': getattr(self.model, 'gamma', None),
-                'batch_size': getattr(self.model, 'batch_size', None),
-                'learning_starts': getattr(self.model, 'learning_starts', None),
-                'gradient_steps': getattr(self.model, 'gradient_steps', None),
-                'action_noise': str(getattr(self.model, 'action_noise', None))
-            }
-            
-            params_path = f"{base_path}_params.json"
-            with open(params_path, 'w') as f:
-                json.dump({k: v for k, v in params.items() if v is not None}, f, indent=4)
-            print(f"Training parameters saved to {params_path}")
-            
-            # 3. Save training statistics
-            training_stats = {
-                'episode': self.curr_episode,
-                'episode_rewards': self.episode_rewards,
-                'completed_episodes': self.completed_episodes,
-                'current_reward': self.current_episode_reward,
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'average_reward': float(np.mean(self.episode_rewards)) if self.episode_rewards else 0,
-                'max_reward': float(np.max(self.episode_rewards)) if self.episode_rewards else 0,
-                'min_reward': float(np.min(self.episode_rewards)) if self.episode_rewards else 0,
-                'completion_rate': float(len(self.completed_episodes)/max(1, len(self.episode_rewards))*100)
-            }
-            
-            stats_path = f"{base_path}_stats.json"
-            with open(stats_path, 'w') as f:
-                json.dump(training_stats, f, indent=4)
-            print(f"Training statistics saved to {stats_path}")
-
-        except Exception as e:
-            print(f"Warning: Failed to save at episode {self.curr_episode}")
-            print(f"Error: {str(e)}")
-            import traceback
-            traceback.print_exc()
-
-class PPOCustomCallback(BaseCustomCallback):
-    def _save_model(self):
-        try:
-            path = f"{self.config['train']}{self.folder_name}/"
-            os.makedirs(path, exist_ok=True)
-            base_path = f"{path}{self.curr_episode}"
-            
-            # 1. Save network weights
-            if hasattr(self.model, 'policy'):
-                policy_path = f"{base_path}_policy.pth"
-                th.save(self.model.policy.state_dict(), policy_path)
-                print(f"Policy network saved to {policy_path}")
-                
-                value_net_path = f"{base_path}_value_net.pth"
-                th.save(self.model.policy.value_net.state_dict(), value_net_path)
-                print(f"Value network saved to {value_net_path}")
-            
-            # 2. Save training parameters
-            params = {
-                'learning_rate': getattr(self.model, 'learning_rate', None),
-                'gamma': getattr(self.model, 'gamma', None),
-                'n_steps': getattr(self.model, 'n_steps', None),
-                'n_epochs': getattr(self.model, 'n_epochs', None),
-                'batch_size': getattr(self.model, 'batch_size', None),
-                'clip_range': str(getattr(self.model, 'clip_range', None)),
-                'ent_coef': getattr(self.model, 'ent_coef', None),
-                'vf_coef': getattr(self.model, 'vf_coef', None)
-            }
-            
-            params_path = f"{base_path}_params.json"
-            with open(params_path, 'w') as f:
-                json.dump({k: v for k, v in params.items() if v is not None}, f, indent=4)
-            print(f"Training parameters saved to {params_path}")
-            
-            # 保存基本統計數據
-            self._save_base_stats(base_path)
-
-        except Exception as e:
-            print(f"Warning: Failed to save at episode {self.curr_episode}")
-            print(f"Error: {str(e)}")
             import traceback
             traceback.print_exc()

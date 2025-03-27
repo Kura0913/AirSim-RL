@@ -1,0 +1,21 @@
+DDPG:
+  class_name: DDPGAgent
+  callback_class: DDPGCustomCallback
+  features_extractor_class: DDPGFeaturesExtractor
+  verbose: 1
+  gamma: 0.9999
+  learning_starts: 1000
+  buffer_size: 60000
+  learning_rate: 0.0003
+  batch_size: 64
+
+PPO:
+  class_name: PPOAgent
+  callback_class: PPOCustomCallback
+  features_extractor_class: PPOFeaturesExtractor
+  verbose: 1
+  gamma: 0.9999
+  n_steps: 512
+  batch_size: 64
+  n_epochs: 5
+  learning_rate: 0.0003
