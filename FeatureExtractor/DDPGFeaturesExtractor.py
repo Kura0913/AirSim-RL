@@ -5,9 +5,8 @@ import gymnasium as gym
 from Network.ModifiedResnet import ModifiedResNet18
 
 class DDPGFeaturesExtractor(BaseFeaturesExtractor):
-    def __init__(self, observation_space: gym.spaces.Dict, features_dim=32, config=None):
+    def __init__(self, observation_space: gym.spaces.Dict, features_dim=32):
         super(DDPGFeaturesExtractor, self).__init__(observation_space, features_dim)
-        self.config = config
         # Initialize the modified ResNet18
         self.depth_extractor = ModifiedResNet18(self.features_dim)
 

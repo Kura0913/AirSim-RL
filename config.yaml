@@ -1,5 +1,5 @@
 training_setting:
-  device: cuda:0
+  device: auto
   load_pretrain_model: false
   pretrain_model_path: ./run/train/
   save_path: ./run/train/
@@ -11,14 +11,14 @@ training_setting:
     - 3000
     - 4000
   Env:
-    class_name: AirsimEnv
+    env_class: AirsimEnv
     resize: 
       width: 128
       height: 128
 
-  Algorithm: PPO
+  Algorithm: DDPG
 
-test_setting:
+testing_setting:
   model_path: ./run/train/test_model_folder/
   test_episodes: 100
   save_path: ./run/test/

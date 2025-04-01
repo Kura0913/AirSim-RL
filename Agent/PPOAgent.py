@@ -5,15 +5,15 @@ import torch as th
 import json
 
 class PPOAgent(BaseAgent):
-    def __init__(self, env, device, agent_config, training_setting, folder_name):
+    def __init__(self, env, agent_config, training_setting, folder_name):
         self.agent_config = agent_config
         self.env = env
+        self.device = training_setting['device']
         self.class_component = self._get_agnet_settings(training_setting, folder_name)
         policy_kwargs = dict(
             features_extractor_class=self.class_component['feature_extractor_class'],
             features_extractor_kwargs=dict(features_dim=32),
             net_arch=[],
-            config=training_setting,
             optimizer_class=th.optim.Adam,
             optimizer_kwargs=dict(
                 eps=1e-5,
@@ -31,11 +31,8 @@ class PPOAgent(BaseAgent):
             batch_size=self.agent_config['batch_size'],
             n_epochs=self.agent_config['n_epochs'],
             learning_rate=self.agent_config["learning_rate"],
-            device=device
+            device=self.device
         )
-
-    def train(self, total_timesteps):
-        self.model.learn(total_timesteps=total_timesteps, callback=self.class_component['callback'])
 
     def save(self, path):
         """Save model components separately instead of saving the whole model"""

@@ -1,5 +1,5 @@
 DDPG:
-  class_name: DDPGAgent
+  agent_class: DDPGAgent
   callback_class: DDPGCustomCallback
   features_extractor_class: DDPGFeaturesExtractor
   verbose: 1
@@ -10,7 +10,7 @@ DDPG:
   batch_size: 64
 
 PPO:
-  class_name: PPOAgent
+  agent_class: PPOAgent
   callback_class: PPOCustomCallback
   features_extractor_class: PPOFeaturesExtractor
   verbose: 1

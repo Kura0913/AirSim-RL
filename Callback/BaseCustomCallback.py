@@ -1,12 +1,12 @@
 from stable_baselines3.common.callbacks import BaseCallback
 import os
-import torch as th
+from abc import ABC, abstractmethod
 import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
 import json
 
-class BaseCustomCallback(BaseCallback):
+class BaseCustomCallback(BaseCallback, ABC):
     def __init__(self, config, folder_name, verbose=0):
         super(BaseCustomCallback, self).__init__(verbose)
         self.config = config
@@ -44,8 +44,9 @@ class BaseCustomCallback(BaseCallback):
 
         return True
 
+    @abstractmethod
     def _save_model(self):
-        raise NotImplementedError
+        pass
 
     def _save_base_stats(self, base_path):
         training_stats = {

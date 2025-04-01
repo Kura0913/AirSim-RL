@@ -19,7 +19,7 @@ class Platform:
     def create_instances(self, drone_name, training_setting, folder_name):    
         # Get and instantiate the environment class
         env_config = training_setting['Env']
-        env_class_name = env_config.pop('class_name')
+        env_class_name = env_config.pop('env_class')
         
         if env_class_name in available_classes:
             env_class = available_classes[env_class_name]
@@ -31,9 +31,9 @@ class Platform:
         
         # Get and instantiate the agent class
         algorithm = training_setting['Algorithm']
-        agent_settings = self.load_yaml_config("./agent_settings.yaml")
-        agent_config = agent_settings[algorithm]
-        agent_class_name = agent_config.pop('class_name')
+        algorithm_settings = self.load_yaml_config("./algorithm_settings.yaml")
+        agent_config = algorithm_settings[algorithm]
+        agent_class_name = agent_config.pop('agent_class')
 
         if agent_class_name in available_classes:
             # Instantiate the specified class and pass in the remaining configuration parameters
@@ -69,7 +69,7 @@ class Platform:
                 else:
                     agent.load(training_setting['pretrain_model_path'], model_code)
                 # Save pretrained model information
-                self.save_pretrain_info(save_path, training_setting['pretrain_model_path'])
+                self.save_load_model_info(save_path, training_setting['pretrain_model_path'])
                 print("Pretrained model loaded successfully")
             except Exception as e:
                 print(f"Error loading pretrained model: {str(e)}")
@@ -78,19 +78,33 @@ class Platform:
         agent.train(total_timesteps=training_setting['episodes'] * training_setting['max_steps'])
         agent.save(f"{training_setting['save_path']}{folder_name}/")
 
-    def test(self, drone_name, test_setting, folder_name):
+    def test(self, drone_name, testing_setting, folder_name):
         # Create full path for saving
-        save_path = os.path.join(test_setting['save_path'], folder_name)
+        save_path = os.path.join(testing_setting['save_path'], folder_name)
         os.makedirs(save_path, exist_ok=True)
 
         # Get the previously trained settings of the specified model
-        model_setting = self.load_yaml_config(os.path.join(test_setting['model_path'], 'training_setting.yaml'))
+        model_setting = self.load_yaml_config(os.path.join(testing_setting['model_path'], 'training_setting.yaml'))
         
+        try:
+            print(f"Loading pretrained model from {testing_setting['model_path']}")
+            model_code = input("Please enter the model code (press Enter to use default): ").strip()
+            if len(model_code) <= 0:
+                agent.load(testing_setting['model_path'])
+            else:
+                agent.load(testing_setting['model_path'], model_code)
+            # Save pretrained model information
+            self.save_load_model_info(save_path, testing_setting['model_path'])
+            print("Test model loaded successfully")
+        except Exception as e:
+            print(f"Error loading test model: {str(e)}")
+            return
+
         # Create agent
         agent = self.create_instances(drone_name, model_setting, folder_name)
 
         # Run tests and get test results
-        test_result = agent.evaluate(test_setting['test_episodes'])
+        test_result = agent.evaluate(testing_setting['test_episodes'])
 
         # Create plots
         self.create_plots(test_result['episode_rewards'], save_path, test_result['completed_episodes'])
@@ -99,7 +113,7 @@ class Platform:
         self.save_row_data(save_path, test_result['episode_rewards'], test_result['completed_episodes'])
 
         # Save results as txt file
-        self.save_results(save_path, test_setting['model_path'], test_result['avg_reward'], test_result['completion_rate'])
+        self.save_results(save_path, testing_setting['model_path'], test_result['avg_reward'], test_result['completion_rate'])
 
         print(f"\nTest results saved to: {save_path}")
         print(f"Average Reward: {test_result['avg_reward']:.2f}")
@@ -118,10 +132,10 @@ class Platform:
             print(f"drone list: {drone_names}")
             return drone_names
 
-    def save_pretrain_info(self, folder_path, model_path):
+    def save_load_model_info(self, folder_path, model_path):
         """Save pretrained model information to a file"""
-        with open(os.path.join(folder_path, "pretrain_model.txt"), 'w') as f:
-            f.write(f"Pretrained model loaded from: {model_path}\n")
+        with open(os.path.join(folder_path, "load_model.txt"), 'w') as f:
+            f.write(f"Model loaded from: {model_path}\n")
 
     def save_results(self, save_path, model_path, avg_reward, completion_rate):
         """Save test results to result.txt"""

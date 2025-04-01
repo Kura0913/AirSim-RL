@@ -1,4 +1,4 @@
-from PolicyComponent.DDPGFeaturesExtractor import DDPGFeaturesExtractor
+from FeatureExtractor.DDPGFeaturesExtractor import DDPGFeaturesExtractor
 from Policy.CustomTD3Policy import CustomTD3Policy
 from Agent.BaseAgent import BaseAgent
 from stable_baselines3 import DDPG
@@ -7,15 +7,15 @@ from ReplayBuffer.PrioritizedReplayBuffer import PrioritizedReplayBuffer
 import json
 
 class DDPGAgent(BaseAgent):
-    def __init__(self, env, device, agent_config, training_setting, folder_name):
+    def __init__(self, env, agent_config, training_setting, folder_name):
         self.agent_config = agent_config
         self.env = env
+        self.device = training_setting['device']
         self.class_component = self._get_agnet_settings(training_setting, folder_name)
         policy_kwargs = dict(
             features_extractor_class=DDPGFeaturesExtractor,
             features_extractor_kwargs=dict(features_dim=32),
             net_arch=dict(pi=[256, 256, 256], qf=[256, 256]),
-            config=training_setting,
             optimizer_class=th.optim.Adam,
             optimizer_kwargs=dict(
                 eps=1e-5,
@@ -33,21 +33,21 @@ class DDPGAgent(BaseAgent):
             buffer_size=self.agent_config['buffer_size'],
             learning_rate=self.agent_config["learning_rate"],
             batch_size=self.agent_config["buffer_size"],
-            device=device
+            device=self.device
         )
 
         self.model.replay_buffer = PrioritizedReplayBuffer(
             buffer_size=50000,
             observation_space=env.observation_space,
             action_space=env.action_space,
-            device=device,
+            device=self.device,
             alpha=0.6,
             beta=0.4,
             beta_increment=0.001,
         )
 
-    def train(self, total_timesteps, callback):
-        self.model.learn(total_timesteps=total_timesteps, callback=callback)
+    def train(self, total_timesteps):
+        self.model.learn(total_timesteps=total_timesteps, callback=self.class_component['callback'])
 
     def save(self, path):
         """Save model components separately instead of saving the whole model"""

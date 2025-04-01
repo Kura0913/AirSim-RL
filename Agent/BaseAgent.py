@@ -1,12 +1,14 @@
 from stable_baselines3.common.base_class import BaseAlgorithm
 import numpy as np
+from abc import ABC, abstractmethod
 
-class BaseAgent:
-    def __init__(self, env, device, agent_config, training_setting, folder_name):
+class BaseAgent(ABC):
+    def __init__(self, env, agent_config, training_setting, folder_name):
         self.agent_config = agent_config
         self.env = env
-        self.device = device
+        self.device = training_setting['device']
         self.model = BaseAlgorithm
+        self.class_component = self._get_agnet_settings(training_setting, folder_name)
 
     def _get_agnet_settings(self, training_setting, folder_name):
         # get feature extractor class
@@ -30,13 +32,15 @@ class BaseAgent:
 
         return {'feature_extractor_class': feature_extractor_class, 'callback': callback}
     
-    def train(self, total_timesteps, callback):
-        self.model.learn(total_timesteps=total_timesteps, callback=callback)
+    def train(self, total_timesteps):
+        self.model.learn(total_timesteps=total_timesteps, callback=self.class_component['callback'])
 
+    @abstractmethod
     def save(self, path):
         """Save model components separately instead of saving the whole model"""
         pass
-
+    
+    @abstractmethod
     def load(self, path, model_code:str=''):
         """Load model components separately"""
         pass
@@ -57,9 +61,6 @@ class BaseAgent:
                 obs, reward, done, truncated, info = self.env.step(action)
                 episode_reward += reward
                 episode_length += 1
-                
-                if render:
-                    self.env.render()
                 
                 if done:
                     if info.get('completed', False):

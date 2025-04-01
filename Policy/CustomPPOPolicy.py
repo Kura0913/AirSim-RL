@@ -5,7 +5,6 @@ from stable_baselines3.common.preprocessing import get_action_dim
 
 class CustomPPOPolicy(ActorCriticPolicy):
     def __init__(self, *args, **kwargs):
-        self.config = kwargs.pop('config')
         super(CustomPPOPolicy, self).__init__(*args, **kwargs)
 
         self.action_dim = get_action_dim(self.action_space)

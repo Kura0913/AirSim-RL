@@ -2,8 +2,9 @@
 import gymnasium as gym
 from gymnasium import spaces
 import airsim
+from abc import ABC, abstractmethod
 
-class BaseMultirotorEnv(gym.Env):
+class BaseMultirotorEnv(gym.Env, ABC):
     def __init__(self, drone_name):
         # env variable
         self.drone_name = drone_name
@@ -17,20 +18,12 @@ class BaseMultirotorEnv(gym.Env):
         self.observation_space = spaces.Dict({
         })
 
+    @abstractmethod
     def reset(self, seed=None):
         pass
 
+    @abstractmethod
     def step(self, action):
-        pass
-
-
-    def _get_obs(self):
-        pass
-
-    def _check_done(self, obs):
-        '''
-        Return: done(bool), mission_completed(bool), arrive_max_steps(bool)
-        '''
         pass
     
     def close(self):
