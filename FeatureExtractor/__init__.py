@@ -1,5 +1,5 @@
-from PolicyComponent.DDPGFeaturesExtractor import DDPGFeaturesExtractor
-from PolicyComponent.PPOFeaturesExtractor import PPOFeaturesExtractor
+from FeatureExtractor.DDPGFeaturesExtractor import DDPGFeaturesExtractor
+from FeatureExtractor.PPOFeaturesExtractor import PPOFeaturesExtractor
 
 
 available_policy_component = {

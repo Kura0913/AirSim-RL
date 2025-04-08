@@ -3,7 +3,7 @@ from Callback import available_callbacks
 from Env import available_envs
 from Network import available_networks
 from Policy import available_policy
-from PolicyComponent import available_policy_component
+from FeatureExtractor import available_policy_component
 
 available_classes = {
     **available_callbacks,
