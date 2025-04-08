@@ -31,7 +31,6 @@ git clone https://github.com/Kura0913/AirSim-RL.git
 Airsim-RL
 │  agent_settings.yaml
 │  config.yaml
-│  ouput.txt
 │  Platform.py
 │  README.md
 │  requirements.txt
