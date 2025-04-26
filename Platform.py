@@ -38,7 +38,7 @@ class Platform:
         if agent_class_name in available_classes:
             # Instantiate the specified class and pass in the remaining configuration parameters
             agent_class = available_classes[agent_class_name]
-            agent_instance = agent_class(env_instance, training_setting['device'], agent_config, training_setting, folder_name)
+            agent_instance = agent_class(env_instance, agent_config, training_setting, folder_name)
             print(f"Successfully created an instance of {agent_class_name}")
         else:
             print(f"Error: Unable to find class {agent_class_name}")

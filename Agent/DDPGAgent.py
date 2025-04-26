@@ -46,9 +46,6 @@ class DDPGAgent(BaseAgent):
             beta_increment=0.001,
         )
 
-    def train(self, total_timesteps):
-        self.model.learn(total_timesteps=total_timesteps, callback=self.class_component['callback'])
-
     def save(self, path):
         """Save model components separately instead of saving the whole model"""
         try:
