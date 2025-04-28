@@ -5,11 +5,10 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from Network.ModifiedResnet import ModifiedResNet18
 
 class PPOFeaturesExtractor(BaseFeaturesExtractor):
-    def __init__(self, observation_space: gym.spaces.Dict, features_dim=32, config=None):
-        super(PPOFeaturesExtractor, self).__init__(observation_space, features_dim)
-        self.config = config    
+    def __init__(self, observation_space: gym.spaces.Dict, features_dim=32):
+        super(PPOFeaturesExtractor, self).__init__(observation_space, features_dim)  
         # Initialize the modified ResNet18
-        self.depth_extractor = ModifiedResNet18(features_dim)        
+        self.depth_extractor = ModifiedResNet18(features_dim)
         
     def forward(self, observations: Dict[str, th.Tensor]) -> th.Tensor:
         return self.depth_extractor(observations["depth_image"])

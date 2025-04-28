@@ -85,10 +85,14 @@ class Platform:
 
         # Get the previously trained settings of the specified model
         model_setting = self.load_yaml_config(os.path.join(testing_setting['model_path'], 'training_setting.yaml'))
-        
+
         try:
             print(f"Loading pretrained model from {testing_setting['model_path']}")
             model_code = input("Please enter the model code (press Enter to use default): ").strip()
+
+            # Create agent
+            agent = self.create_instances(drone_name, model_setting, folder_name)
+
             if len(model_code) <= 0:
                 agent.load(testing_setting['model_path'])
             else:
@@ -96,28 +100,26 @@ class Platform:
             # Save pretrained model information
             self.save_load_model_info(save_path, testing_setting['model_path'])
             print("Test model loaded successfully")
+
+            # Run tests and get test results
+            test_result = agent.evaluate(testing_setting['test_episodes'])
+
+            # Create plots
+            self.create_plots(test_result['episode_rewards'], save_path, test_result['completed_episodes'])
+
+            # save row data as json file
+            self.save_row_data(save_path, test_result['episode_rewards'], test_result['completed_episodes'])
+
+            # Save results as txt file
+            self.save_results(save_path, testing_setting['model_path'], test_result['avg_reward'], test_result['completion_rate'])
+
+            print(f"\nTest results saved to: {save_path}")
+            print(f"Average Reward: {test_result['avg_reward']:.2f}")
+            print(f"Completion Rate: {test_result['completion_rate']:.2f}%")
+
         except Exception as e:
             print(f"Error loading test model: {str(e)}")
             return
-
-        # Create agent
-        agent = self.create_instances(drone_name, model_setting, folder_name)
-
-        # Run tests and get test results
-        test_result = agent.evaluate(testing_setting['test_episodes'])
-
-        # Create plots
-        self.create_plots(test_result['episode_rewards'], save_path, test_result['completed_episodes'])
-
-        # save row data as json file
-        self.save_row_data(save_path, test_result['episode_rewards'], test_result['completed_episodes'])
-
-        # Save results as txt file
-        self.save_results(save_path, testing_setting['model_path'], test_result['avg_reward'], test_result['completion_rate'])
-
-        print(f"\nTest results saved to: {save_path}")
-        print(f"Average Reward: {test_result['avg_reward']:.2f}")
-        print(f"Completion Rate: {test_result['completion_rate']:.2f}%")
 
     def load_drone_name(self):
         drone_list = self.get_drone_names(os.path.expanduser("~\\Documents\\AirSim\\settings.json"))

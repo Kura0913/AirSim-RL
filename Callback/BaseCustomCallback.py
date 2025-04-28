@@ -99,8 +99,8 @@ class BaseCustomCallback(BaseCallback, ABC):
             plt.xlabel('Episode', fontsize=10)
             plt.ylabel('Reward', fontsize=10)
             plt.grid(True, linestyle='--', alpha=0.7)
-            
-            plt.gca().xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+            # Set fixed interval of 500 for x-axis
+            plt.gca().xaxis.set_major_locator(plt.MultipleLocator(500))
             
             max_reward = max(self.episode_rewards) if self.episode_rewards else 0
             min_reward = min(self.episode_rewards) if self.episode_rewards else 0
@@ -143,7 +143,8 @@ class BaseCustomCallback(BaseCallback, ABC):
                 plt.grid(True, linestyle='--', alpha=0.7)
                 plt.legend()
                 
-                plt.gca().xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+                # Set fixed interval of 500 for x-axis
+                plt.gca().xaxis.set_major_locator(plt.MultipleLocator(500))
                 
             plt.savefig(avg_path, dpi=300, bbox_inches='tight')
             plt.close()
@@ -167,7 +168,8 @@ class BaseCustomCallback(BaseCallback, ABC):
             # range: 0-100%
             plt.ylim(0, 100)
             
-            plt.gca().xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+            # Set fixed interval of 500 for x-axis
+            plt.gca().xaxis.set_major_locator(plt.MultipleLocator(500))
             
             # Add final completion rate information
             final_rate = completion_rates[-1] if completion_rates else 0
@@ -213,7 +215,8 @@ class BaseCustomCallback(BaseCallback, ABC):
                 plt.ylim(0, 100)  # range: 0-100%
                 plt.legend()
                 
-                plt.gca().xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+                # Set fixed interval of 500 for x-axis
+                plt.gca().xaxis.set_major_locator(plt.MultipleLocator(500))
                 
                 # Add final moving completion rate information
                 final_moving_rate = moving_completion[-1] if len(moving_completion) > 0 else 0

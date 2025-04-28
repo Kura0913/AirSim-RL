@@ -1,7 +1,7 @@
 training_setting:
   device: auto
   load_pretrain_model: false
-  pretrain_model_path: ./run/train/
+  pretrain_model_path: ./run/train/pretrain_model_folder/
   save_path: ./run/train/
   episodes: 5000
   max_steps: 700
